@@ -597,10 +597,21 @@ function ptMois() {
 
 /* ---------- PROJETS ---------- */
 const PRJ = { filtre: 'actifs', sel: null };
-function nextProjetCode() {
-  const yy = pad(new Date().getFullYear() % 100), pre = `DCPI-${yy}-`;
-  const max = DB.projets.map(p => p.code || '').filter(c => c.startsWith(pre)).map(c => parseInt(c.slice(pre.length), 10) || 0).reduce((a, b) => Math.max(a, b), 0);
-  return pre + String(max + 1).padStart(3, '0');
+// Codes : client sur 4 lettres (ex. MJ Valorisation → MJVA), projet = CODECLIENT-NN (ex. MJVA-01)
+const FORMES = ['SAS', 'SASU', 'SARL', 'EURL', 'SA', 'SCI', 'SNC', 'STE', 'SOCIETE', 'ETS', 'GROUPE', 'LES', 'LA', 'LE', 'L', 'DE', 'DU', 'DES', 'ET'];
+function suggestCode(nom) {
+  const mots = String(nom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().split(/[^A-Z0-9]+/).filter(m => m && !FORMES.includes(m));
+  if (!mots.length) return '';
+  let code = mots[0].length >= 4 ? mots[0].slice(0, 4) : mots[0];
+  for (let i = 1; code.length < 4 && i < mots.length; i++) code += mots[i].slice(0, 4 - code.length >= 2 ? 2 : 4 - code.length);
+  return code.slice(0, 4);
+}
+const clientCode = c => (c?.code || suggestCode(c?.nom)).toUpperCase();
+function nextProjetCode(clientId) {
+  const c = byId('clients', clientId); if (!c) return '';
+  const pre = clientCode(c) + '-';
+  const max = DB.projets.map(p => p.code || '').filter(x => x.startsWith(pre)).map(x => parseInt(x.slice(pre.length), 10) || 0).reduce((a, b) => Math.max(a, b), 0);
+  return pre + String(max + 1).padStart(2, '0');
 }
 const PROJET_FIELDS = () => [
   { k: 'code', label: 'Code projet', required: true },
@@ -617,9 +628,12 @@ const PROJET_FIELDS = () => [
   { k: 'description', label: 'Description / périmètre', type: 'textarea', full: true }
 ];
 function editProjet(p, presetClient) {
-  formModal(p ? 'Modifier le projet' : 'Nouveau projet', PROJET_FIELDS(), p || { code: nextProjetCode(), clientId: presetClient || '' }, async v => {
+  formModal(p ? 'Modifier le projet' : 'Nouveau projet', PROJET_FIELDS(), p || { code: nextProjetCode(presetClient), clientId: presetClient || '' }, async v => {
     if (!DB.clients.length) { toast('Créez d\'abord un client dans le CRM', true); return false; }
+    v.code = v.code.toUpperCase();
     if (DB.projets.some(x => x.code === v.code && x.id !== p?.id)) { toast('Ce code projet existe déjà', true); return false; }
+    const cl = byId('clients', v.clientId);
+    if (cl && !cl.code) await Store.save('clients', { ...cl, code: clientCode(cl) });   // fige le code client au 1er projet
     const id = await Store.save('projets', { ...(p || { taches: [] }), ...v });
     toast(p ? 'Projet modifié' : 'Projet créé');
     if (!p) { PRJ.sel = id; VIEW = 'projets'; render(); }
@@ -627,7 +641,13 @@ function editProjet(p, presetClient) {
     onDelete: p ? async () => {
       if (DB.pointages.some(x => x.projetId === p.id)) { toast('Des pointages existent sur ce projet : passez-le plutôt en « Terminé » ou « Perdu ».', true); return; }
       await safe(() => Store.remove('projets', p.id), 'Projet supprimé'); PRJ.sel = null; render();
-    } : null
+    } : null,
+    onOpen: p ? null : form => {
+      // nouveau projet : le code suit le client choisi, tant qu'il n'a pas été modifié à la main
+      const code = form.elements.code, cli = form.elements.clientId; let manuel = false;
+      code.addEventListener('input', () => manuel = true);
+      cli.addEventListener('change', () => { if (!manuel) code.value = nextProjetCode(cli.value); });
+    }
   });
 }
 VIEWS.projets = () => {
@@ -739,7 +759,7 @@ function listeRows() {
   return DB.projets.filter(p =>
     (LST.statut === 'tous' || (LST.statut === 'actifs' ? PROJET_ACTIFS.includes(p.statut) : p.statut === LST.statut)) &&
     (!LST.client || p.clientId === LST.client) &&
-    (!LST.annee || (p.code || '').startsWith(`DCPI-${LST.annee.slice(2)}-`) || (p.dateDebut || '').startsWith(LST.annee)) &&
+    (!LST.annee || (p.dateDebut || p.createdAt || '').startsWith(LST.annee)) &&
     (!q || [p.code, p.nom, clientNom(p.clientId), p.refClient, p.description].join(' ').toLowerCase().includes(q)))
     .map(projetRow)
     .sort((a, b) => {
@@ -770,7 +790,7 @@ function listeTableHTML() {
   </table></div>`;
 }
 VIEWS.liste = () => {
-  const annees = [...new Set(DB.projets.flatMap(p => [(p.dateDebut || '').slice(0, 4), (p.code || '').match(/^DCPI-(\d\d)-/) ? '20' + p.code.slice(5, 7) : '']).filter(Boolean))].sort().reverse();
+  const annees = [...new Set(DB.projets.map(p => (p.dateDebut || p.createdAt || '').slice(0, 4)).filter(Boolean))].sort().reverse();
   return `<div class="card">
     <div class="row" style="margin-bottom:12px"><h2 style="margin:0">Liste des projets</h2><div class="spacer"></div>
       <button class="btn" data-act="lst-csv">Exporter (Excel/CSV)</button><button class="btn primary" data-act="prj-new">+ Nouveau projet</button></div>
@@ -802,6 +822,7 @@ function exportListeCSV() {
 const CRM = { q: '', statut: '', sel: null };
 const CLIENT_FIELDS = [
   { k: 'nom', label: 'Nom de l\'entreprise', required: true },
+  { k: 'code', label: 'Code client (4 lettres)', placeholder: 'ex. MJVA' },
   { k: 'statut', label: 'Statut', type: 'select', options: CLIENT_STATUTS, def: 'Prospect' },
   { k: 'secteur', label: 'Secteur d\'activité' },
   { k: 'siret', label: 'SIRET' },
@@ -815,6 +836,10 @@ const CLIENT_FIELDS = [
 ];
 function editClient(c) {
   formModal(c ? 'Modifier le client' : 'Nouveau client', CLIENT_FIELDS, withCpVille(c), async v => {
+    v.code = (v.code || suggestCode(v.nom)).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (DB.clients.some(x => x.id !== c?.id && clientCode(x) === v.code)) { toast(`Le code ${v.code} est déjà utilisé par un autre client`, true); return false; }
+    if (c && c.code && v.code !== c.code && DB.projets.some(p => p.clientId === c.id))
+      toast('Code client modifié : les codes des projets existants ne changent pas.');
     const id = await Store.save('clients', { ...(c || { contacts: [] }), ...v, cpVille: '' });
     toast(c ? 'Client modifié' : 'Client créé'); CRM.sel = id; if (VIEW !== 'crm') VIEW = 'crm'; render();
   }, {
@@ -826,7 +851,12 @@ function editClient(c) {
       }, 'Client supprimé');
       CRM.sel = null; render();
     } : null,
-    onOpen: villeAuto
+    onOpen: form => {
+      villeAuto(form);
+      const nom = form.elements.nom, code = form.elements.code; let manuel = !!code.value;
+      code.addEventListener('input', () => manuel = true);
+      nom.addEventListener('input', () => { if (!manuel) code.value = suggestCode(nom.value); });
+    }
   });
 }
 // Code postal → propose la ou les communes (API publique geo.api.gouv.fr, sans clé)
@@ -871,10 +901,10 @@ function editInteraction(col, cid, it) {
 function crmListHTML() {
   const q = CRM.q.toLowerCase();
   const list = DB.clients.filter(c => (!CRM.statut || c.statut === CRM.statut) &&
-    (!q || [c.nom, c.secteur, cpv(c), ...(c.contacts || []).map(nomContact)].join(' ').toLowerCase().includes(q)))
+    (!q || [c.nom, clientCode(c), c.secteur, cpv(c), ...(c.contacts || []).map(nomContact)].join(' ').toLowerCase().includes(q)))
     .sort((a, b) => a.nom.localeCompare(b.nom));
   return list.length ? list.map(c => `<div class="list-item ${c.id === CRM.sel ? 'on' : ''}" data-act="crm-open" data-id="${c.id}">
-      <div class="row"><span class="t">${esc(c.nom)}</span><div class="spacer"></div>${badge(c.statut)}</div>
+      <div class="row"><span class="t">${esc(c.nom)}</span> <span class="small muted">${esc(clientCode(c))}</span><div class="spacer"></div>${badge(c.statut)}</div>
       <div class="small muted">${esc([c.secteur, cpv(c)].filter(Boolean).join(' · '))}</div></div>`).join('')
     : '<div class="empty">Aucun client.</div>';
 }
@@ -916,7 +946,7 @@ function clientDetail(c) {
   const prj = DB.projets.filter(p => p.clientId === c.id).sort((a, b) => (b.code || '').localeCompare(a.code || ''));
   const hTot = sum(DB.pointages.filter(x => prj.some(p => p.id === x.projetId)), x => x.heures);
   return `<div class="card">
-    <div class="row"><h2 style="margin:0">${esc(c.nom)}</h2>${badge(c.statut)}<div class="spacer"></div>
+    <div class="row"><h2 style="margin:0">${esc(c.nom)}</h2><span class="badge">${esc(clientCode(c))}</span>${badge(c.statut)}<div class="spacer"></div>
       <button class="btn sm" data-act="client-edit" data-id="${c.id}">Modifier</button></div>
     <div class="info">
       ${c.secteur ? `<div><small>Secteur</small>${esc(c.secteur)}</div>` : ''}
@@ -1041,7 +1071,7 @@ function ficheHTML() {
   const groups = prjIds.map(id => byId('projets', id)).filter(p => pts.some(x => x.projetId === p.id))
     .sort((a, b) => a.code.localeCompare(b.code));
   const contact = (c.contacts || []).find(x => x.principal) || (c.contacts || [])[0];
-  const ref = `FP-${per.du.slice(0, 7).replace('-', '')}-${FI.projetId ? byId('projets', FI.projetId).code : slug(c.nom).slice(0, 10).toUpperCase()}`;
+  const ref = `FP-${per.du.slice(0, 7).replace('-', '')}-${FI.projetId ? byId('projets', FI.projetId).code : clientCode(c)}`;
   const S = SETTINGS;
   let rows = '', totH = 0, totM = 0, hasM = false;
   const colspan = FI.detail ? 4 : 1;
