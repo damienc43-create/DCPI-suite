@@ -105,8 +105,34 @@ tr.click{cursor:pointer} tr.click:hover td{background:#F8F7F2}
 .sec{margin-top:18px;padding-top:12px;border-top:1px solid var(--line)}
 .late{color:var(--bad);font-weight:700}
 .day-h{display:flex;justify-content:space-between;background:#ECE9E1;padding:6px 10px;border-radius:6px;font-weight:700;margin-top:10px;text-transform:capitalize}
-.pt-line{display:grid;grid-template-columns:1fr auto auto;gap:10px;padding:7px 10px;border-bottom:1px solid var(--line);align-items:center}
-.pt-line .h{font-weight:800;color:var(--basalte);white-space:nowrap}
+.wk-title{font-family:Montserrat,sans-serif;font-weight:800;font-size:1.15rem}
+.seg{display:inline-flex;gap:2px;background:#ECE9E1;border-radius:8px;padding:2px}
+.seg .btn{border:0;background:none}.seg .btn.on{background:var(--basalte);color:#fff}
+.wk-grid{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.wk-day{padding:10px;border-right:1px solid var(--line);min-height:220px;background:#fff}
+.wk-day:last-child{border-right:0}
+.wk-day.today{background:#F5FAF6}
+.wk-day.today .wk-dh{border-bottom:2px solid var(--vert);padding-bottom:6px}
+.wk-day.today .wk-lab{color:var(--vert)}
+.wk-dh{display:flex;justify-content:space-between;align-items:flex-start}
+.wk-lab{font-size:.74rem;font-weight:800;letter-spacing:.06em;color:var(--muted);font-family:Montserrat,sans-serif}
+.wk-tot{font-weight:800;font-family:Montserrat,sans-serif}
+.wk-plus{width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:#F3F1EA;cursor:pointer;font-weight:700;line-height:1}
+.wk-plus:hover{background:var(--vert);color:#fff;border-color:var(--vert)}
+.wk-card{border-left:4px solid var(--vert);background:#F7F6F1;border-radius:6px;padding:6px 8px;margin-bottom:6px;cursor:pointer;font-size:.82rem}
+.wk-card:hover{background:#EFEDE5}
+.wk-h{font-weight:800;font-size:.78rem}
+.wk-sub{color:var(--ink);font-size:.78rem}
+.wk-desc{color:var(--muted);font-size:.76rem;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.wk-add{width:100%;border:1px dashed #D6D2C6;background:none;border-radius:6px;padding:9px;color:var(--muted);cursor:pointer;font-size:.82rem}
+.wk-add:hover{border-color:var(--vert);color:var(--vert)}
+@media (max-width:760px){.wk-grid{grid-template-columns:1fr}.wk-day{border-right:0;border-bottom:1px solid var(--line);min-height:0}}
+.mo-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.mo-h{font-size:.74rem;font-weight:800;color:var(--muted);text-align:center;font-family:Montserrat,sans-serif;padding:4px}
+.mo-c{background:#fff;border:1px solid var(--line);border-radius:6px;min-height:78px;padding:5px;cursor:pointer;font-size:.8rem}
+.mo-c:hover{border-color:var(--vert)}.mo-c.out{opacity:.4}.mo-c.today{border:2px solid var(--vert)}
+.mo-n{font-weight:700;color:var(--muted)}
+.mo-tag{color:#fff;border-radius:4px;padding:1px 5px;font-size:.7rem;font-weight:700;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .journal-item{padding:8px 0;border-bottom:1px solid var(--line)}
 
 /* ---------- Modal & toast ---------- */
@@ -182,6 +208,7 @@ tr.click{cursor:pointer} tr.click:hover td{background:#F8F7F2}
       <button data-view="liste">Liste des projets</button>
       <button data-view="projets">Suivi projet</button>
       <button data-view="crm">CRM</button>
+      <button data-view="partenaires">Fournisseurs &amp; partenaires</button>
       <button data-view="fiches">Fiches de pointage</button>
       <button data-view="reglages">Réglages</button>
     </nav>
@@ -219,7 +246,7 @@ const ALLOWED_EMAIL = "damienc43@gmail.com";
 const APP_VERSION = '1.0';
 const DEMO = FIREBASE_CONFIG.apiKey === 'A_REMPLIR';
 const SDK_KO = !DEMO && typeof firebase === 'undefined';  // config présente mais Firebase non chargé
-const COLS = ['clients', 'interactions', 'projets', 'pointages'];
+const COLS = ['clients', 'interactions', 'projets', 'pointages', 'partenaires'];
 const DEFAULT_SETTINGS = {
   nom: 'DCPI', mention: 'Projets & Ingénierie', slogan: 'Vos projets, de l\'idée à la réalisation.', raisonSociale: '', adresse: '', cp: '', ville: '',
   siret: '', email: '', tel: '', heuresJour: 7, lastBackup: ''
@@ -230,9 +257,11 @@ const PROJET_ACTIFS = ['Proposition', 'En cours', 'En pause'];
 const FACTURATIONS = ['Régie (TJM)', 'Forfait'];
 const TACHE_STATUTS = ['À faire', 'En cours', 'Fait'];
 const LIEUX = ['Sur site client', 'Bureau', 'À distance', 'Déplacement'];
-const INTER_TYPES = ['Appel', 'Rendez-vous', 'E-mail', 'Visite', 'Proposition envoyée', 'Autre'];
+const INTER_TYPES = ['Appel', 'Rendez-vous', 'E-mail', 'Visite', 'Proposition envoyée', 'Demande de devis', 'Devis reçu', 'Autre'];
+const PART_TYPES = ['Fournisseur', 'Sous-traitant', 'Bureau d\'études', 'Constructeur / intégrateur', 'Partenaire', 'Prestataire de services', 'Autre'];
+const PART_STATUTS = ['Actif', 'À qualifier', 'Inactif'];
 
-let DB = { clients: [], interactions: [], projets: [], pointages: [] };
+let DB = { clients: [], interactions: [], projets: [], pointages: [], partenaires: [] };
 let SETTINGS = { ...DEFAULT_SETTINGS };
 let VIEW = 'accueil';
 let USER = null;
@@ -322,7 +351,7 @@ const Store = {
       d => { SETTINGS = { ...DEFAULT_SETTINGS, ...(d.exists ? d.data() : {}) }; render(); markLoaded('settings'); },
       err => toast('Lecture des réglages impossible : ' + err.message, true)));
   },
-  stop() { this.unsubs.forEach(u => u()); this.unsubs = []; DB = { clients: [], interactions: [], projets: [], pointages: [] }; },
+  stop() { this.unsubs.forEach(u => u()); this.unsubs = []; DB = { clients: [], interactions: [], projets: [], pointages: [], partenaires: [] }; },
   persistDemo() {
     try { localStorage.setItem(DEMO_KEY, JSON.stringify({ db: DB, settings: SETTINGS })); }
     catch (e) { toast('Stockage local impossible : ' + e.message, true); }
@@ -440,7 +469,7 @@ VIEWS.accueil = () => {
   return `
   ${backupMsg}
   <div class="row" style="margin-bottom:14px"><h2 style="margin:0">Bonjour ${esc((USER?.displayName || '').split(' ')[0])}</h2><div class="spacer"></div>
-    <button class="btn accent" data-act="goto" data-id="pointages">+ Pointer du temps</button></div>
+    <button class="btn accent" data-act="pt-add" data-id="${t}">+ Pointer du temps</button></div>
   <div class="kpis">
     <div class="kpi"><b>${num(sum(ptW, p => p.heures), 2)} h</b><span>Semaine ${isoWeek(t)} (${num(jours(sum(ptW, p => p.heures)))} j)</span></div>
     <div class="kpi"><b>${num(jours(hFactM))} j</b><span>Facturables en ${fmtMonth(ym)}</span></div>
@@ -450,7 +479,7 @@ VIEWS.accueil = () => {
   <div class="two-eq">
     <div class="card"><h3>Relances à faire</h3>
       ${relances.length ? relances.map(i => `<div class="journal-item row">
-          <div><span class="${i.relance < t ? 'late' : ''}">${fmtDate(i.relance)}</span> · <a href="#" data-act="crm-open" data-id="${i.clientId}">${esc(clientNom(i.clientId))}</a><br>
+          <div><span class="${i.relance < t ? 'late' : ''}">${fmtDate(i.relance)}</span> · ${i.partenaireId ? `<a href="#" data-act="part-open" data-id="${i.partenaireId}">${esc(byId('partenaires', i.partenaireId)?.nom || '—')}</a>` : `<a href="#" data-act="crm-open" data-id="${i.clientId}">${esc(clientNom(i.clientId))}</a>`}<br>
           <span class="small muted">${esc(i.type)} du ${fmtDate(i.date)} — ${esc(i.resume)}</span></div>
           <div class="spacer"></div><button class="btn sm" data-act="relance-ok" data-id="${i.id}">Fait</button></div>`).join('')
         : '<div class="empty">Aucune relance en attente.</div>'}
@@ -465,87 +494,106 @@ VIEWS.accueil = () => {
   </div>`;
 };
 
-/* ---------- POINTAGES ---------- */
-const PT = { week: mondayOf(todayStr()) };
-let PTF = { date: todayStr(), projetId: '', tacheId: '', heures: '', lieu: LIEUX[0], facturable: true, description: '', editId: null };
+/* ---------- POINTAGES : vue semaine / mois ---------- */
+const PT = { week: mondayOf(todayStr()), mode: 'semaine', mois: todayStr().slice(0, 7), we: false, last: { projetId: '', lieu: LIEUX[0] } };
+const PRJ_COLORS = ['#286747', '#B58B62', '#3B6E8F', '#7A5C99', '#C0553A', '#4FA36E', '#8A6D3B', '#2F8C8C'];
+const prjColor = id => { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return PRJ_COLORS[h % PRJ_COLORS.length]; };
+const fmtJM = s => { const d = parseISO(s); return d.getDate() + '/' + (d.getMonth() + 1); };
 function projetsSaisissables(includeId) {
   return DB.projets.filter(p => PROJET_ACTIFS.includes(p.statut) || p.id === includeId)
     .sort((a, b) => (a.code || '').localeCompare(b.code || ''));
 }
-VIEWS.pointages = () => {
-  const prj = projetsSaisissables(PTF.projetId);
-  const p = byId('projets', PTF.projetId);
-  const taches = p?.taches || [];
-  const mon = PT.week, sun = addDays(mon, 6);
-  const wk = DB.pointages.filter(x => x.date >= mon && x.date <= sun);
-  const days = Array.from({ length: 7 }, (_, i) => addDays(mon, i));
-  const totW = sum(wk, x => x.heures), totF = sum(wk.filter(x => x.facturable), x => x.heures);
-  return `
-  <div class="card">
-    <h2>${PTF.editId ? 'Modifier un pointage' : 'Nouveau pointage'}</h2>
-    ${prj.length ? '' : '<p class="empty">Créez d\'abord un projet (onglet Projets) pour pouvoir pointer.</p>'}
-    <form id="ptform" class="grid-form" autocomplete="off">
-      <div class="fld"><label>Date *</label><input type="date" name="date" value="${esc(PTF.date)}" required></div>
-      <div class="fld span2"><label>Projet *</label><select name="projetId" required>
-        <option value="">— Choisir —</option>${prj.map(x => `<option value="${x.id}" ${x.id === PTF.projetId ? 'selected' : ''}>${esc(projetLabel(x))} (${esc(clientNom(x.clientId))})</option>`).join('')}</select></div>
-      <div class="fld"><label>Tâche</label><select name="tacheId"><option value="">(aucune)</option>${taches.map(t => `<option value="${t.id}" ${t.id === PTF.tacheId ? 'selected' : ''}>${esc(t.nom)}</option>`).join('')}</select></div>
-      <div class="fld"><label>Heures *</label><input type="number" name="heures" step="0.25" min="0" value="${esc(PTF.heures)}" placeholder="ex. 3,5"></div>
-      <div class="fld"><label>Lieu</label><select name="lieu">${optHTML(LIEUX, PTF.lieu)}</select></div>
-      <label class="fld chk"><input type="checkbox" name="facturable" ${PTF.facturable ? 'checked' : ''}> Facturable</label>
-      <div class="fld full"><label>Description du travail</label><input type="text" name="description" value="${esc(PTF.description)}" placeholder="ex. Réunion de lancement, revue du cahier des charges…"></div>
-      <div class="full row">
-        <button class="btn primary" type="submit">${PTF.editId ? 'Enregistrer la modification' : 'Ajouter'}</button>
-        ${PTF.editId ? '<button class="btn" type="button" data-act="pt-cancel">Annuler</button>' : ''}
-        <span class="small muted">Raccourcis :</span>
-        ${[1, 2, 3.5, 4, hJ()].map(h => `<button class="btn sm" type="button" data-act="pt-h" data-id="${h}">${num(h)} h</button>`).join('')}
-      </div>
-    </form>
-  </div>
-  <div class="card">
-    <div class="row">
-      <button class="btn sm" data-act="pt-week" data-id="-7">◀</button>
-      <h3 style="margin:0">Semaine ${isoWeek(mon)} — du ${fmtDate(mon)} au ${fmtDate(sun)}</h3>
-      <button class="btn sm" data-act="pt-week" data-id="7">▶</button>
-      <button class="btn sm" data-act="pt-week" data-id="0">Aujourd'hui</button>
-      <div class="spacer"></div>
-      <span><b>${num(totW)} h</b> · ${num(jours(totW))} j <span class="muted small">(dont ${num(totF)} h facturables)</span></span>
-    </div>
-    ${days.map(d => {
-      const items = wk.filter(x => x.date === d).sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
-      if (!items.length && (parseISO(d).getDay() % 6 === 0)) return '';
-      return `<div class="day-h"><span>${fmtDay(d)}</span><span>${items.length ? num(sum(items, x => x.heures)) + ' h' : ''}</span></div>
-        ${items.length ? items.map(x => {
-          const pj = byId('projets', x.projetId), tk = pj?.taches?.find(t => t.id === x.tacheId);
-          return `<div class="pt-line"><div><b>${esc(pj?.code || '?')}</b> ${esc(pj?.nom || 'Projet supprimé')}${tk ? ' · ' + esc(tk.nom) : ''}
-            <br><span class="small muted">${esc(clientNom(pj?.clientId))} · ${esc(x.lieu || '')}${x.facturable ? '' : ' · <i>non facturable</i>'}${x.description ? ' — ' + esc(x.description) : ''}</span></div>
-            <span class="h">${num(x.heures)} h</span>
-            <span><button class="btn sm link" data-act="pt-edit" data-id="${x.id}">Modifier</button><button class="btn sm link" style="color:var(--bad)" data-act="pt-del" data-id="${x.id}">✕</button></span></div>`;
-        }).join('') : '<div class="small muted" style="padding:4px 10px">—</div>'}`;
-    }).join('')}
-  </div>`;
-};
-VIEWS.pointages_after = () => {
-  const f = $('#ptform'); if (!f) return;
-  f.addEventListener('input', e => {
-    const el = e.target; if (!el.name) return;
-    PTF[el.name] = el.type === 'checkbox' ? el.checked : el.value;
+function editPointage(x, date) {
+  const prj = projetsSaisissables(x?.projetId);
+  if (!prj.length) { toast('Créez d\'abord un projet actif (Liste des projets).', true); return; }
+  const v0 = x || { date: date || todayStr(), projetId: PT.last.projetId && prj.some(p => p.id === PT.last.projetId) ? PT.last.projetId : '', lieu: PT.last.lieu, facturable: true };
+  const tOpts = pid => [{ v: '', l: '(aucune)' }, ...((byId('projets', pid)?.taches) || []).map(t => ({ v: t.id, l: t.nom }))];
+  formModal(x ? 'Modifier le pointage' : 'Nouveau pointage', [
+    { k: 'date', label: 'Date', type: 'date', required: true },
+    { k: 'heures', label: 'Heures', type: 'number', step: '0.25', min: 0, required: true, placeholder: 'ex. 3,5' },
+    { k: 'projetId', label: 'Projet', type: 'select', required: true, full: true, options: [{ v: '', l: '— Choisir —' }, ...prj.map(p => ({ v: p.id, l: `${projetLabel(p)} (${clientNom(p.clientId)})` }))] },
+    { k: 'tacheId', label: 'Tâche', type: 'select', options: tOpts(v0.projetId) },
+    { k: 'lieu', label: 'Lieu', type: 'select', options: LIEUX },
+    { k: 'facturable', label: 'Facturable', type: 'checkbox' },
+    { k: 'description', label: 'Description du travail', full: true, placeholder: 'ex. Réunion de lancement, revue du cahier des charges…' }
+  ], v0, async v => {
+    if (!(v.heures > 0) || v.heures > 24) { toast('Nombre d\'heures invalide', true); return false; }
+    await Store.save('pointages', { ...(x || {}), ...v });
+    PT.last = { projetId: v.projetId, lieu: v.lieu };
+    toast(x ? 'Pointage modifié' : 'Pointage ajouté');
+  }, {
+    submitLabel: x ? 'Enregistrer' : 'Ajouter',
+    onDelete: x ? async () => safe(() => Store.remove('pointages', x.id), 'Pointage supprimé') : null,
+    onOpen: form => {
+      const sel = form.elements.projetId, tk = form.elements.tacheId;
+      sel.addEventListener('change', () => { tk.innerHTML = optHTML(tOpts(sel.value), ''); });
+      const h = form.elements.heures, box = document.createElement('div');
+      box.className = 'row'; box.style.marginTop = '6px'; box.style.gap = '6px';
+      box.innerHTML = [1, 2, 3.5, 4, hJ()].map(n => `<button type="button" class="btn sm" data-h="${n}">${num(n)} h</button>`).join('');
+      box.onclick = e => { const b = e.target.closest('[data-h]'); if (b) h.value = b.dataset.h; };
+      h.parentElement.appendChild(box);
+    }
   });
-  f.elements.projetId.addEventListener('change', () => { PTF.tacheId = ''; render(); });
-  f.onsubmit = async e => {
-    e.preventDefault();
-    const h = parseFloat(String(PTF.heures).replace(',', '.'));
-    if (!PTF.date) return toast('Date obligatoire', true);
-    if (!PTF.projetId) return toast('Choisissez un projet', true);
-    if (!(h > 0) || h > 24) return toast('Nombre d\'heures invalide', true);
-    const rec = { date: PTF.date, projetId: PTF.projetId, tacheId: PTF.tacheId || '', heures: h, lieu: PTF.lieu, facturable: !!PTF.facturable, description: (PTF.description || '').trim() };
-    if (PTF.editId) { const old = byId('pointages', PTF.editId); Object.assign(rec, { id: PTF.editId, createdAt: old?.createdAt }); }
-    const ok = await safe(() => Store.save('pointages', rec), PTF.editId ? 'Pointage modifié' : 'Pointage ajouté');
-    if (ok === undefined) return;
-    PT.week = mondayOf(PTF.date);
-    PTF = { ...PTF, heures: '', description: '', editId: null };
-    render();
-  };
-};
+}
+function cardPt(x) {
+  const pj = byId('projets', x.projetId), tk = pj?.taches?.find(t => t.id === x.tacheId);
+  return `<div class="wk-card" style="border-left-color:${prjColor(x.projetId)}" data-act="pt-edit" data-id="${x.id}" title="${esc(clientNom(pj?.clientId))}">
+    <div><b style="color:${prjColor(x.projetId)}">${esc(pj?.code || '?')}</b> <span class="wk-h">${num(x.heures)} h</span>${x.facturable ? '' : ' <span class="small muted">NF</span>'}</div>
+    <div class="wk-sub">${esc(tk?.nom || pj?.nom || 'Projet supprimé')}</div>
+    ${x.description ? `<div class="wk-desc">${esc(x.description)}</div>` : ''}</div>`;
+}
+function ptToolbar(title, sub) {
+  return `<div class="row" style="margin-bottom:6px"><div><div class="wk-title">${title}</div><div class="small muted">${sub}</div></div><div class="spacer"></div>
+    <button class="btn sm" data-act="pt-nav" data-id="-1">◀ Préc.</button><button class="btn sm" data-act="pt-nav" data-id="0">Aujourd'hui</button><button class="btn sm" data-act="pt-nav" data-id="1">Suiv. ▶</button>
+    <span class="seg"><button class="btn sm ${PT.mode === 'semaine' ? 'on' : ''}" data-act="pt-mode" data-id="semaine">Semaine</button><button class="btn sm ${PT.mode === 'mois' ? 'on' : ''}" data-act="pt-mode" data-id="mois">Mois</button></span>
+    ${PT.mode === 'semaine' ? `<label class="small" style="display:flex;gap:5px;align-items:center"><input type="checkbox" data-chg="pt-we" ${PT.we ? 'checked' : ''} style="width:auto"> Week-end</label>` : ''}
+    <button class="btn sm accent" data-act="pt-add" data-id="${todayStr()}">+ Pointer</button></div>`;
+}
+VIEWS.pointages = () => PT.mode === 'mois' ? ptMois() : ptSemaine();
+function ptSemaine() {
+  const mon = PT.week, t = todayStr();
+  const days = Array.from({ length: 7 }, (_, i) => addDays(mon, i));
+  const wk = DB.pointages.filter(x => x.date >= mon && x.date <= days[6]);
+  const showWE = PT.we || wk.some(x => x.date > days[4]);
+  const vis = showWE ? days : days.slice(0, 5);
+  const totW = sum(wk, x => x.heures), totF = sum(wk.filter(x => x.facturable), x => x.heures);
+  const dl = vis[vis.length - 1];
+  return `<div class="card">
+    ${ptToolbar(`${fmtJM(mon)} → ${fmtJM(dl)} ${dl.slice(0, 4)}`, `Semaine ${isoWeek(mon)} · journal des pointages`)}
+    <div class="small" style="margin:4px 0 12px">Total semaine : <b style="color:var(--vert);font-size:1rem">${num(totW)} h</b> · ${num(jours(totW))} j <span class="muted">(dont ${num(totF)} h facturables)</span></div>
+    <div class="wk-grid" style="--n:${vis.length}">
+      ${vis.map(d => {
+        const items = wk.filter(x => x.date === d).sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+        const h = sum(items, x => x.heures), pct = Math.min(h / hJ() * 100, 100);
+        const lab = parseISO(d).toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '').toUpperCase() + ' ' + parseISO(d).getDate();
+        return `<div class="wk-day ${d === t ? 'today' : ''}">
+          <div class="wk-dh"><div><div class="wk-lab">${lab}</div><div class="wk-tot">${num(h)} h</div></div><button class="wk-plus" data-act="pt-add" data-id="${d}" title="Ajouter">+</button></div>
+          <div class="bar ${h > hJ() ? 'over' : ''}" style="margin:6px 0 8px"><i style="width:${pct}%;background:var(--vert)"></i></div>
+          ${items.map(cardPt).join('')}
+          <button class="wk-add" data-act="pt-add" data-id="${d}">+ Ajouter</button>
+        </div>`;
+      }).join('')}
+    </div></div>`;
+}
+function ptMois() {
+  const ym = PT.mois, first = ym + '-01', last = lastDayOfMonth(ym), t = todayStr();
+  const start = mondayOf(first), cells = [];
+  for (let d = start; d <= last || cells.length % 7; d = addDays(d, 1)) cells.push(d);
+  const pts = DB.pointages.filter(x => x.date >= first && x.date <= last);
+  const tot = sum(pts, x => x.heures), totF = sum(pts.filter(x => x.facturable), x => x.heures);
+  return `<div class="card">
+    ${ptToolbar(fmtMonth(ym).replace(/^./, c => c.toUpperCase()), 'Vue mensuelle · cliquez sur un jour pour ouvrir sa semaine')}
+    <div class="small" style="margin:4px 0 12px">Total mois : <b style="color:var(--vert);font-size:1rem">${num(tot)} h</b> · ${num(jours(tot))} j <span class="muted">(dont ${num(jours(totF))} j facturables)</span></div>
+    <div class="mo-grid">${['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(j => `<div class="mo-h">${j}</div>`).join('')}
+      ${cells.map(d => {
+        const it = pts.filter(x => x.date === d), h = sum(it, x => x.heures);
+        const codes = [...new Set(it.map(x => x.projetId))];
+        return `<div class="mo-c ${d.slice(0, 7) !== ym ? 'out' : ''} ${d === t ? 'today' : ''}" data-act="pt-goweek" data-id="${d}">
+          <div class="row"><span class="mo-n">${parseISO(d).getDate()}</span><div class="spacer"></div>${h ? `<b>${num(h)} h</b>` : ''}</div>
+          ${codes.map(id => `<div class="mo-tag" style="background:${prjColor(id)}">${esc(byId('projets', id)?.code || '?')}</div>`).join('')}</div>`;
+      }).join('')}
+    </div></div>`;
+}
 
 /* ---------- PROJETS ---------- */
 const PRJ = { filtre: 'actifs', sel: null };
@@ -795,8 +843,8 @@ function villeAuto(form) {
     } catch (e) { /* hors ligne : saisie manuelle */ }
   });
 }
-function editContact(cid, idx) {
-  const c = byId('clients', cid); if (!c) return;
+function editContact(col, cid, idx) {
+  const c = byId(col, cid); if (!c) return;
   const contacts = [...(c.contacts || [])], ct = idx != null ? contacts[idx] : null;
   formModal(ct ? 'Modifier le contact' : 'Nouveau contact', [
     { k: 'prenom', label: 'Prénom' }, { k: 'nom', label: 'Nom', required: true }, { k: 'fonction', label: 'Fonction' },
@@ -805,10 +853,11 @@ function editContact(cid, idx) {
   ], ct, async v => {
     if (v.principal) contacts.forEach(x => x.principal = false);
     if (ct) contacts[idx] = { ...ct, ...v }; else contacts.push(v);
-    await Store.save('clients', { ...c, contacts }); toast('Contact enregistré');
-  }, { onDelete: ct ? async () => { contacts.splice(idx, 1); await safe(() => Store.save('clients', { ...c, contacts }), 'Contact supprimé'); } : null });
+    await Store.save(col, { ...c, contacts }); toast('Contact enregistré');
+  }, { onDelete: ct ? async () => { contacts.splice(idx, 1); await safe(() => Store.save(col, { ...c, contacts }), 'Contact supprimé'); } : null });
 }
-function editInteraction(cid, it) {
+function editInteraction(col, cid, it) {
+  const key = col === 'partenaires' ? 'partenaireId' : 'clientId';
   formModal(it ? 'Modifier l\'échange' : 'Nouvel échange', [
     { k: 'date', label: 'Date', type: 'date', required: true, def: todayStr() },
     { k: 'type', label: 'Type', type: 'select', options: INTER_TYPES },
@@ -816,7 +865,7 @@ function editInteraction(cid, it) {
     { k: 'relance', label: 'Date de relance (facultatif)', type: 'date' },
     { k: 'relanceFaite', label: 'Relance faite', type: 'checkbox' }
   ], it, async v => {
-    await Store.save('interactions', { ...(it || {}), clientId: cid, ...v }); toast('Échange enregistré');
+    await Store.save('interactions', { ...(it || {}), [key]: cid, ...v }); toast('Échange enregistré');
   }, { onDelete: it ? async () => safe(() => Store.remove('interactions', it.id), 'Échange supprimé') : null });
 }
 function crmListHTML() {
@@ -846,9 +895,25 @@ VIEWS.crm_after = () => {
   if (q) q.oninput = () => { CRM.q = q.value; $('#crm-list').innerHTML = crmListHTML(); };
   if (st) st.onchange = () => { CRM.statut = st.value; $('#crm-list').innerHTML = crmListHTML(); };
 };
+function contactsBlock(col, o) {
+  return `<div class="sec"><div class="row"><h3 style="margin:0">Contacts</h3><div class="spacer"></div><button class="btn sm" data-act="contact-new" data-col="${col}" data-id="${o.id}">+ Contact</button></div>
+    ${(o.contacts || []).length ? o.contacts.map((x, i) => `<div class="journal-item row"><div><b>${esc(nomContact(x))}</b>${x.principal ? ' <span class="badge">principal</span>' : ''} <span class="muted">${esc(x.fonction || '')}</span><br>
+      <span class="small">${x.email ? `<a href="mailto:${esc(x.email)}">${esc(x.email)}</a>` : ''} ${x.tel ? ' · <a href="tel:' + esc(x.tel) + '">' + esc(x.tel) + '</a>' : ''}</span></div>
+      <div class="spacer"></div><button class="btn sm link" data-act="contact-edit" data-col="${col}" data-id="${o.id}" data-t="${i}">Modifier</button></div>`).join('') : '<div class="empty">Aucun contact.</div>'}
+  </div>`;
+}
+function journalBlock(col, o) {
+  const key = col === 'partenaires' ? 'partenaireId' : 'clientId';
+  const inter = DB.interactions.filter(i => i[key] === o.id).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  return `<div class="sec"><div class="row"><h3 style="margin:0">Journal des échanges</h3><div class="spacer"></div><button class="btn sm" data-act="inter-new" data-col="${col}" data-id="${o.id}">+ Échange</button></div>
+    ${inter.length ? inter.map(i => `<div class="journal-item"><div class="row"><b>${fmtDate(i.date)}</b> <span class="badge">${esc(i.type)}</span>
+        ${i.relance ? `<span class="small ${!i.relanceFaite && i.relance < todayStr() ? 'late' : 'muted'}">Relance ${fmtDate(i.relance)}${i.relanceFaite ? ' ✓' : ''}</span>` : ''}
+        <div class="spacer"></div><button class="btn sm link" data-act="inter-edit" data-id="${i.id}">Modifier</button></div>
+        <div class="small" style="white-space:pre-wrap">${esc(i.resume)}</div></div>`).join('') : '<div class="empty">Aucun échange enregistré.</div>'}
+  </div>`;
+}
 function clientDetail(c) {
   const prj = DB.projets.filter(p => p.clientId === c.id).sort((a, b) => (b.code || '').localeCompare(a.code || ''));
-  const inter = DB.interactions.filter(i => i.clientId === c.id).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   const hTot = sum(DB.pointages.filter(x => prj.some(p => p.id === x.projetId)), x => x.heures);
   return `<div class="card">
     <div class="row"><h2 style="margin:0">${esc(c.nom)}</h2>${badge(c.statut)}<div class="spacer"></div>
@@ -863,20 +928,98 @@ function clientDetail(c) {
       <div><small>Temps total pointé</small>${num(jours(hTot))} j</div>
     </div>
     ${c.notes ? `<p class="small" style="white-space:pre-wrap">${esc(c.notes)}</p>` : ''}
-    <div class="sec"><div class="row"><h3 style="margin:0">Contacts</h3><div class="spacer"></div><button class="btn sm" data-act="contact-new" data-id="${c.id}">+ Contact</button></div>
-      ${(c.contacts || []).length ? c.contacts.map((x, i) => `<div class="journal-item row"><div><b>${esc(nomContact(x))}</b>${x.principal ? ' <span class="badge">principal</span>' : ''} <span class="muted">${esc(x.fonction || '')}</span><br>
-        <span class="small">${x.email ? `<a href="mailto:${esc(x.email)}">${esc(x.email)}</a>` : ''} ${x.tel ? ' · <a href="tel:' + esc(x.tel) + '">' + esc(x.tel) + '</a>' : ''}</span></div>
-        <div class="spacer"></div><button class="btn sm link" data-act="contact-edit" data-id="${c.id}" data-t="${i}">Modifier</button></div>`).join('') : '<div class="empty">Aucun contact.</div>'}
-    </div>
+    ${contactsBlock('clients', c)}
     <div class="sec"><div class="row"><h3 style="margin:0">Projets</h3><div class="spacer"></div><button class="btn sm" data-act="prj-new-for" data-id="${c.id}">+ Projet</button></div>
       ${prj.length ? `<table><tbody>${prj.map(p => `<tr class="click" data-act="prj-open" data-id="${p.id}"><td><b>${esc(p.code)}</b> ${esc(p.nom)}</td><td>${badge(p.statut)}</td><td class="num">${num(jours(heuresProjet(p.id)))} j</td></tr>`).join('')}</tbody></table>` : '<div class="empty">Aucun projet.</div>'}
     </div>
-    <div class="sec"><div class="row"><h3 style="margin:0">Journal des échanges</h3><div class="spacer"></div><button class="btn sm" data-act="inter-new" data-id="${c.id}">+ Échange</button></div>
-      ${inter.length ? inter.map(i => `<div class="journal-item"><div class="row"><b>${fmtDate(i.date)}</b> <span class="badge">${esc(i.type)}</span>
-          ${i.relance ? `<span class="small ${!i.relanceFaite && i.relance < todayStr() ? 'late' : 'muted'}">Relance ${fmtDate(i.relance)}${i.relanceFaite ? ' ✓' : ''}</span>` : ''}
-          <div class="spacer"></div><button class="btn sm link" data-act="inter-edit" data-id="${i.id}">Modifier</button></div>
-          <div class="small" style="white-space:pre-wrap">${esc(i.resume)}</div></div>`).join('') : '<div class="empty">Aucun échange enregistré.</div>'}
+    ${journalBlock('clients', c)}
+  </div>`;
+}
+
+/* ---------- FOURNISSEURS & PARTENAIRES ---------- */
+const PAR = { q: '', type: '', statut: '', sel: null };
+const PART_FIELDS = [
+  { k: 'nom', label: 'Nom de l\'entreprise', required: true },
+  { k: 'type', label: 'Type', type: 'select', options: PART_TYPES, def: 'Fournisseur' },
+  { k: 'statut', label: 'Statut', type: 'select', options: PART_STATUTS, def: 'À qualifier' },
+  { k: 'specialites', label: 'Spécialités / domaines', full: true, placeholder: 'ex. électricité HT/BT, automatisme, génie civil, charpente métallique…' },
+  { k: 'zone', label: 'Zone d\'intervention', placeholder: 'ex. Auvergne-Rhône-Alpes' },
+  { k: 'evaluation', label: 'Évaluation', type: 'select', options: [{ v: '', l: '—' }, { v: '5', l: '★★★★★ Excellent' }, { v: '4', l: '★★★★ Très bon' }, { v: '3', l: '★★★ Correct' }, { v: '2', l: '★★ Moyen' }, { v: '1', l: '★ À éviter' }] },
+  { k: 'siret', label: 'SIRET' },
+  { k: 'adresse', label: 'Adresse', full: true },
+  { k: 'cp', label: 'Code postal' }, { k: 'ville', label: 'Ville' },
+  { k: 'tel', label: 'Téléphone' }, { k: 'site', label: 'Site web' },
+  { k: 'assuranceRC', label: 'Attestation RC valable jusqu\'au', type: 'date' },
+  { k: 'decennale', label: 'Décennale valable jusqu\'au', type: 'date' },
+  { k: 'conditions', label: 'Conditions (tarifs, TJM, délais, remises…)', type: 'textarea', full: true },
+  { k: 'notes', label: 'Notes / retours d\'expérience', type: 'textarea', full: true }
+];
+const stars = n => n ? '★'.repeat(+n) + '<span style="color:#ccc">' + '★'.repeat(5 - n) + '</span>' : '';
+function editPartenaire(o) {
+  formModal(o ? 'Modifier le fournisseur / partenaire' : 'Nouveau fournisseur / partenaire', PART_FIELDS, o, async v => {
+    const id = await Store.save('partenaires', { ...(o || { contacts: [] }), ...v });
+    toast('Enregistré'); PAR.sel = id; if (VIEW !== 'partenaires') VIEW = 'partenaires'; render();
+  }, {
+    onDelete: o ? async () => {
+      await safe(async () => {
+        for (const i of DB.interactions.filter(i => i.partenaireId === o.id)) await Store.remove('interactions', i.id);
+        await Store.remove('partenaires', o.id);
+      }, 'Supprimé');
+      PAR.sel = null; render();
+    } : null,
+    onOpen: villeAuto
+  });
+}
+const expire = d => d && d < todayStr();
+function parListHTML() {
+  const q = PAR.q.toLowerCase();
+  const list = DB.partenaires.filter(o => (!PAR.type || o.type === PAR.type) && (!PAR.statut || o.statut === PAR.statut) &&
+    (!q || [o.nom, o.specialites, o.zone, cpv(o), o.notes, ...(o.contacts || []).map(nomContact)].join(' ').toLowerCase().includes(q)))
+    .sort((a, b) => a.nom.localeCompare(b.nom));
+  return list.length ? list.map(o => `<div class="list-item ${o.id === PAR.sel ? 'on' : ''}" data-act="part-open" data-id="${o.id}">
+      <div class="row"><span class="t">${esc(o.nom)}</span><div class="spacer"></div><span class="small" style="color:var(--cuivre)">${stars(o.evaluation)}</span></div>
+      <div class="small muted">${esc([o.type, o.specialites].filter(Boolean).join(' · '))}${expire(o.assuranceRC) || expire(o.decennale) ? ' · <span class="late">attestation expirée</span>' : ''}</div></div>`).join('')
+    : '<div class="empty">Aucun fournisseur ou partenaire.</div>';
+}
+VIEWS.partenaires = () => {
+  const o = byId('partenaires', PAR.sel);
+  return `<div class="two">
+    <div class="card">
+      <div class="row" style="margin-bottom:10px"><h2 style="margin:0">Fournisseurs &amp; partenaires</h2><div class="spacer"></div><button class="btn primary sm" data-act="part-new">+ Nouveau</button></div>
+      <input id="par-q" placeholder="Rechercher (nom, spécialité, zone…)" value="${esc(PAR.q)}" style="margin-bottom:8px">
+      <div class="row" style="margin-bottom:8px;flex-wrap:nowrap">
+        <select id="par-type">${optHTML([{ v: '', l: 'Tous types' }, ...PART_TYPES], PAR.type)}</select>
+        <select id="par-st">${optHTML([{ v: '', l: 'Tous statuts' }, ...PART_STATUTS], PAR.statut)}</select></div>
+      <div id="par-list">${parListHTML()}</div>
     </div>
+    <div>${o ? partDetail(o) : '<div class="card empty">Sélectionnez un fournisseur ou partenaire, ou créez-en un.</div>'}</div>
+  </div>`;
+};
+VIEWS.partenaires_after = () => {
+  const q = $('#par-q'), t = $('#par-type'), st = $('#par-st'), up = () => $('#par-list').innerHTML = parListHTML();
+  if (q) q.oninput = () => { PAR.q = q.value; up(); };
+  if (t) t.onchange = () => { PAR.type = t.value; up(); };
+  if (st) st.onchange = () => { PAR.statut = st.value; up(); };
+};
+function partDetail(o) {
+  const att = (lab, d) => d ? `<div><small>${lab}</small><span class="${expire(d) ? 'late' : ''}">${fmtDate(d)}${expire(d) ? ' — expirée' : ''}</span></div>` : '';
+  return `<div class="card">
+    <div class="row"><h2 style="margin:0">${esc(o.nom)}</h2><span class="badge">${esc(o.type)}</span>${badge(o.statut)}<div class="spacer"></div>
+      <button class="btn sm" data-act="part-edit" data-id="${o.id}">Modifier</button></div>
+    <div class="info">
+      ${o.evaluation ? `<div><small>Évaluation</small><span style="color:var(--cuivre);font-size:1.1rem">${stars(o.evaluation)}</span></div>` : ''}
+      ${o.specialites ? `<div><small>Spécialités</small>${esc(o.specialites)}</div>` : ''}
+      ${o.zone ? `<div><small>Zone</small>${esc(o.zone)}</div>` : ''}
+      ${o.adresse || cpv(o) ? `<div><small>Adresse</small>${esc(o.adresse)}<br>${esc(cpv(o))}</div>` : ''}
+      ${o.tel ? `<div><small>Téléphone</small><a href="tel:${esc(o.tel)}">${esc(o.tel)}</a></div>` : ''}
+      ${o.site ? `<div><small>Site</small>${esc(o.site)}</div>` : ''}
+      ${o.siret ? `<div><small>SIRET</small>${esc(o.siret)}</div>` : ''}
+      ${att('Attestation RC', o.assuranceRC)}${att('Décennale', o.decennale)}
+    </div>
+    ${o.conditions ? `<div class="sec"><h3>Conditions</h3><p class="small" style="white-space:pre-wrap;margin:0">${esc(o.conditions)}</p></div>` : ''}
+    ${o.notes ? `<div class="sec"><h3>Notes / retours d'expérience</h3><p class="small" style="white-space:pre-wrap;margin:0">${esc(o.notes)}</p></div>` : ''}
+    ${contactsBlock('partenaires', o)}
+    ${journalBlock('partenaires', o)}
   </div>`;
 }
 
@@ -998,7 +1141,7 @@ VIEWS.reglages = () => `
   </div>
   <div class="card small muted">
     Version ${APP_VERSION} · Mode : <b>${DEMO ? 'démo (stockage local du navigateur)' : 'Firebase'}</b> ·
-    ${DB.clients.length} clients · ${DB.projets.length} projets · ${DB.pointages.length} pointages · ${DB.interactions.length} échanges
+    ${DB.clients.length} clients · ${DB.partenaires.length} fournisseurs/partenaires · ${DB.projets.length} projets · ${DB.pointages.length} pointages · ${DB.interactions.length} échanges
     ${DEMO ? `<div style="margin-top:8px"><button class="btn sm danger" data-act="demo-reset">Effacer les données de démo</button></div>` : ''}
   </div>`;
 VIEWS.reglages_after = () => {
@@ -1055,10 +1198,13 @@ const ACTIONS = {
   'crm-open': (el, id) => { CRM.sel = id; go('crm'); },
   'client-new': () => editClient(null),
   'client-edit': (el, id) => editClient(byId('clients', id)),
-  'contact-new': (el, id) => editContact(id, null),
-  'contact-edit': (el, id) => editContact(id, +el.dataset.t),
-  'inter-new': (el, id) => editInteraction(id, null),
-  'inter-edit': (el, id) => { const i = byId('interactions', id); if (i) editInteraction(i.clientId, i); },
+  'contact-new': (el, id) => editContact(el.dataset.col || 'clients', id, null),
+  'contact-edit': (el, id) => editContact(el.dataset.col || 'clients', id, +el.dataset.t),
+  'inter-new': (el, id) => editInteraction(el.dataset.col || 'clients', id, null),
+  'inter-edit': (el, id) => { const i = byId('interactions', id); if (i) i.partenaireId ? editInteraction('partenaires', i.partenaireId, i) : editInteraction('clients', i.clientId, i); },
+  'part-open': (el, id) => { PAR.sel = id; go('partenaires'); },
+  'part-new': () => editPartenaire(null),
+  'part-edit': (el, id) => editPartenaire(byId('partenaires', id)),
   'prj-open': (el, id) => { PRJ.from = VIEW; PRJ.sel = id; go('projets'); },
   'prj-back': () => { PRJ.sel = null; go(PRJ.from && PRJ.from !== 'projets' ? PRJ.from : 'projets'); },
   'lst-sort': (el, id) => { LST.dir = LST.sort === id ? -LST.dir : (LST_COLS.find(c => c.k === id)?.num || LST_COLS.find(c => c.k === id)?.date ? -1 : 1); LST.sort = id; $('#lst-table').innerHTML = listeTableHTML(); },
@@ -1070,14 +1216,16 @@ const ACTIONS = {
   'tache-edit': (el, id) => editTache(id, el.dataset.t),
   'fiche-from-prj': (el, id) => { const p = byId('projets', id); FI.clientId = p.clientId; FI.projetId = p.id; go('fiches'); },
   'fiche-print': () => printFiche(),
-  'pt-week': (el, id) => { PT.week = +id === 0 ? mondayOf(todayStr()) : addDays(PT.week, +id); render(); },
-  'pt-h': (el, id) => { PTF.heures = id; const i = $('#ptform')?.elements.heures; if (i) i.value = id; },
-  'pt-edit': (el, id) => {
-    const x = byId('pointages', id); if (!x) return;
-    PTF = { date: x.date, projetId: x.projetId, tacheId: x.tacheId || '', heures: x.heures, lieu: x.lieu || LIEUX[0], facturable: !!x.facturable, description: x.description || '', editId: x.id };
-    render(); window.scrollTo(0, 0);
+  'pt-nav': (el, id) => {
+    const n = +id, t = todayStr();
+    if (PT.mode === 'mois') { if (!n) PT.mois = t.slice(0, 7); else { const d = parseISO(PT.mois + '-01'); d.setMonth(d.getMonth() + n); PT.mois = toISO(d).slice(0, 7); } }
+    else PT.week = n ? addDays(PT.week, 7 * n) : mondayOf(t);
+    render();
   },
-  'pt-cancel': () => { PTF = { ...PTF, heures: '', description: '', editId: null }; render(); },
+  'pt-mode': (el, id) => { PT.mode = id; if (id === 'mois') PT.mois = addDays(PT.week, 3).slice(0, 7); render(); },
+  'pt-goweek': (el, id) => { PT.week = mondayOf(id); PT.mode = 'semaine'; render(); },
+  'pt-add': (el, id) => editPointage(null, id),
+  'pt-edit': (el, id) => { const x = byId('pointages', id); if (x) editPointage(x); },
   'pt-del': (el, id) => { if (confirm('Supprimer ce pointage ?')) safe(() => Store.remove('pointages', id), 'Pointage supprimé'); },
   'demo-reset': () => { if (confirm('Effacer toutes les données de démo de ce navigateur ?')) { localStorage.removeItem(DEMO_KEY); location.reload(); } }
 };
@@ -1091,6 +1239,7 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('change', e => {
   const el = e.target.closest('[data-chg]'); if (!el) return;
+  if (el.dataset.chg === 'pt-we') { PT.we = el.checked; render(); return; }
   if (el.dataset.chg === 'tache-statut') {
     const p = byId('projets', el.dataset.id); if (!p) return;
     const taches = (p.taches || []).map(t => t.id === el.dataset.t ? { ...t, statut: el.value } : t);
