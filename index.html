@@ -256,7 +256,7 @@ const FIREBASE_CONFIG = {
 const ALLOWED_EMAIL = "damienc43@gmail.com";
 
 /* ===================================================================== */
-const APP_VERSION = '1.10';
+const APP_VERSION = '1.11';
 const DEMO = FIREBASE_CONFIG.apiKey === 'A_REMPLIR';
 const SDK_KO = !DEMO && typeof firebase === 'undefined';  // config présente mais Firebase non chargé
 const COLS = ['clients', 'interactions', 'projets', 'pointages', 'partenaires', 'devis'];
@@ -688,17 +688,27 @@ const PROJET_FIELDS = () => [
   { k: 'budgetJours', label: 'Budget (jours)', type: 'number', step: '0.5', min: 0 },
   { k: 'dateDebut', label: 'Début', type: 'date' },
   { k: 'dateFin', label: 'Échéance', type: 'date' },
+  { k: 'devisId', label: 'Devis rattaché', type: 'select', options: [{ v: '', l: '— Aucun —' }, ...[...DB.devis].sort((a, b) => (b.numero || '').localeCompare(a.numero || '')).map(d => ({ v: d.id, l: `${d.numero} — ${d.objet || ''} (${clientNom(d.clientId)})` }))] },
   { k: 'refClient', label: 'Réf. commande client' },
   { k: 'description', label: 'Description / périmètre', type: 'textarea', full: true }
 ];
 function editProjet(p, presetClient, preset = {}, afterCreate = null) {
-  formModal(p ? 'Modifier le projet' : 'Nouveau projet', PROJET_FIELDS(), p || { code: nextProjetCode(presetClient), clientId: presetClient || '', ...preset }, async v => {
+  const pv = p ? { ...p, devisId: p.devisId || DB.devis.find(d => d.projetId === p.id)?.id || '' } : null;
+  formModal(p ? 'Modifier le projet' : 'Nouveau projet', PROJET_FIELDS(), pv || { code: nextProjetCode(presetClient), clientId: presetClient || '', ...preset }, async v => {
     if (!DB.clients.length) { toast('Créez d\'abord un client dans le CRM', true); return false; }
     v.code = v.code.toUpperCase();
     if (DB.projets.some(x => x.code === v.code && x.id !== p?.id)) { toast('Ce code projet existe déjà', true); return false; }
     const cl = byId('clients', v.clientId);
     if (cl && !cl.code) await Store.save('clients', { ...cl, code: clientCode(cl) });   // fige le code client au 1er projet
-    const id = await Store.save('projets', { ...(p || { taches: [], ...(preset.devisId ? { devisId: preset.devisId } : {}) }), ...v });
+    const id = await Store.save('projets', { ...(p || { taches: [] }), ...v });
+    // lien devis ↔ projet dans les deux sens (un devis = un projet)
+    for (const d of DB.devis.filter(d => d.projetId === (p?.id || id) && d.id !== v.devisId)) await Store.save('devis', { ...d, projetId: '' });
+    const dv = byId('devis', v.devisId);
+    if (dv && dv.projetId !== id) {
+      const autre = DB.projets.find(x => x.id === dv.projetId && x.id !== id);
+      if (autre) await Store.save('projets', { ...autre, devisId: '' });
+      await Store.save('devis', { ...dv, projetId: id });
+    }
     if (!p && afterCreate) await afterCreate(id);
     toast(p ? 'Projet modifié' : 'Projet créé');
     if (!p) { PRJ.sel = id; VIEW = 'projets'; render(); }
@@ -707,9 +717,14 @@ function editProjet(p, presetClient, preset = {}, afterCreate = null) {
       if (DB.pointages.some(x => x.projetId === p.id)) { toast('Des pointages existent sur ce projet : passez-le plutôt en « Terminé » ou « Perdu ».', true); return; }
       await safe(() => Store.remove('projets', p.id), 'Projet supprimé'); PRJ.sel = null; render();
     } : null,
-    onOpen: p ? null : form => {
+    onOpen: form => {
+      const code = form.elements.code, cli = form.elements.clientId, dvs = form.elements.devisId;
+      // la liste des devis ne montre que ceux du client choisi
+      const filtre = () => { const cur = dvs.value; dvs.innerHTML = optHTML([{ v: '', l: '— Aucun —' }, ...DB.devis.filter(d => d.clientId === cli.value).sort((a, b) => (b.numero || '').localeCompare(a.numero || '')).map(d => ({ v: d.id, l: `${d.numero} — ${d.objet || ''} · ${d.statut}${d.projetId && d.projetId !== p?.id ? ' (déjà lié)' : ''}` }))], cur); };
+      cli.addEventListener('change', filtre); filtre();
+      if (p) return;
       // nouveau projet : le code suit le client choisi, tant qu'il n'a pas été modifié à la main
-      const code = form.elements.code, cli = form.elements.clientId; let manuel = false;
+      let manuel = false;
       code.addEventListener('input', () => manuel = true);
       cli.addEventListener('change', () => { if (!manuel) code.value = nextProjetCode(cli.value); });
     }
