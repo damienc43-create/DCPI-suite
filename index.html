@@ -24,16 +24,10 @@ a{color:var(--vert)}
 [hidden]{display:none!important}
 
 /* ---------- Logo ---------- */
-.logo{display:inline-flex;flex-direction:column;align-items:stretch;font-weight:800;letter-spacing:.01em;color:#fff;font-size:1.45rem;line-height:.9}
-.logo .lg{display:inline-flex;align-items:center;gap:1px}
-.logo .lg svg{width:1.15em;height:.7em;margin:0 .04em;color:var(--vert-clair)}
-.logo.dark{color:var(--basalte)}
-.logo.dark .lg svg{color:var(--vert)}
-.logo .amp{color:var(--vert-clair)} .logo.dark .amp{color:var(--vert)}
-.logo .cote{display:block;width:100%;height:auto;margin-top:3px}
-.logo .slogan{font-family:Lato,sans-serif;font-style:italic;font-weight:400;letter-spacing:0;font-size:.42em;color:var(--vert);margin-top:4px;text-align:center}
-.logo small{display:block;font-size:.36em;font-weight:600;letter-spacing:.32em;margin-top:5px;white-space:nowrap}
-#login .logo{font-size:2.4rem;margin-bottom:6px}
+.logo{display:inline-block;line-height:0}
+.logo svg{display:block;width:100%;height:auto}
+header .logo{width:150px}
+#login .logo{width:300px;max-width:100%;margin-bottom:8px}
 
 /* ---------- Header ---------- */
 header.top{background:var(--basalte);color:#fff;position:sticky;top:0;z-index:20;box-shadow:0 2px 6px rgba(0,0,0,.15)}
@@ -133,7 +127,7 @@ tr.click{cursor:pointer} tr.click:hover td{background:#F8F7F2}
 .fiche-wrap{background:#E4E1D8;padding:18px;border-radius:var(--radius);overflow-x:auto}
 .fiche{background:#fff;width:210mm;min-height:280mm;margin:0 auto;padding:14mm 13mm;color:#1C2430;font-size:10pt;box-shadow:0 2px 12px rgba(0,0,0,.12)}
 .fiche .f-head{display:flex;justify-content:space-between;gap:20px;border-bottom:3px solid var(--cuivre);padding-bottom:10px}
-.fiche .f-head .logo{font-size:24pt}
+.fiche .f-head .logo{width:66mm}
 .fiche .f-ident{font-size:8.5pt;color:#444;margin-top:6px;line-height:1.35}
 .fiche .f-title{text-align:right}
 .fiche .f-title h1{font-size:15pt;color:var(--basalte);letter-spacing:.04em;margin:0}
@@ -223,7 +217,8 @@ const ALLOWED_EMAIL = "damienc43@gmail.com";
 
 /* ===================================================================== */
 const APP_VERSION = '1.0';
-const DEMO = FIREBASE_CONFIG.apiKey === 'A_REMPLIR' || typeof firebase === 'undefined';
+const DEMO = FIREBASE_CONFIG.apiKey === 'A_REMPLIR';
+const SDK_KO = !DEMO && typeof firebase === 'undefined';  // config présente mais Firebase non chargé
 const COLS = ['clients', 'interactions', 'projets', 'pointages'];
 const DEFAULT_SETTINGS = {
   nom: 'DCPI', mention: 'Projets & Ingénierie', slogan: 'Vos projets, de l\'idée à la réalisation.', raisonSociale: '', adresse: '', cpVille: '',
@@ -273,13 +268,24 @@ const clientNom = id => byId('clients', id)?.nom || '—';
 const projetLabel = p => p ? `${p.code} — ${p.nom}` : '—';
 const heuresProjet = (pid, onlyFact = false) => sum(DB.pointages.filter(x => x.projetId === pid && (!onlyFact || x.facturable)), x => x.heures);
 
-// Charte DCPI : double crête vert sapin + mention + ligne de cotation + slogan
-const LOGO_SVG = `<svg viewBox="0 0 46 26" aria-hidden="true"><path d="M3 22 L13 11 L20 18 L31 4 L43 22" fill="none" stroke="currentColor" stroke-width="4.2" stroke-linejoin="miter" stroke-linecap="square"/></svg>`;
-const COTE_SVG = `<svg class="cote" viewBox="0 0 300 12" aria-hidden="true"><g stroke="currentColor" stroke-width="1.4" fill="currentColor"><line x1="3" y1="6" x2="296" y2="6"/><line x1="3" y1="0.5" x2="3" y2="11.5"/><line x1="0" y1="10" x2="7" y2="2"/><path d="M299 6 L287 1.5 L287 10.5 Z"/><line x1="299" y1="0.5" x2="299" y2="11.5"/></g></svg>`;
-function logoHTML(full = false) {
-  const m = esc((SETTINGS.mention || '').toUpperCase()).replace('&amp;', '<span class="amp">&amp;</span>');
-  return `<span class="lg"><span>DC</span>${LOGO_SVG}<span>PI</span></span>${m ? `<small>${m}</small>` : ''}`
-    + (full ? `${COTE_SVG}${SETTINGS.slogan ? `<span class="slogan">${esc(SETTINGS.slogan)}</span>` : ''}` : '');
+// Logo conforme à la charte DCPI : DC + double crête vert sapin + PI, mention espacée,
+// ligne de cotation et slogan. SVG unique avec largeurs imposées (textLength) pour garder
+// les proportions même si la police Montserrat n'est pas chargée.
+function logoHTML(full = false, dark = false) {
+  const ink = dark ? '#FFFFFF' : '#343A3C', green = dark ? '#4FA36E' : '#286747';
+  const F = `font-family="Montserrat,'Segoe UI',Arial,sans-serif"`;
+  const m = esc((SETTINGS.mention || '').toUpperCase()).replace('&amp;', `<tspan fill="${green}">&amp;</tspan>`);
+  const h = full ? 156 : (m ? 106 : 76);
+  return `<svg viewBox="0 0 340 ${h}" role="img" aria-label="DCPI ${esc(SETTINGS.mention || '')}">
+    <text x="2" y="72" ${F} font-weight="800" font-size="88" fill="${ink}" textLength="128" lengthAdjust="spacingAndGlyphs">DC</text>
+    <path d="M139 58 L159 37 L172 50 L196 22 L221 57" fill="none" stroke="${green}" stroke-width="10" stroke-linejoin="miter" stroke-miterlimit="10"/>
+    <text x="230" y="72" ${F} font-weight="800" font-size="88" fill="${ink}" textLength="94" lengthAdjust="spacingAndGlyphs">PI</text>
+    ${m ? `<text x="4" y="101" ${F} font-weight="600" font-size="17.5" fill="${ink}" textLength="318" lengthAdjust="spacing">${m}</text>` : ''}
+    ${full ? `<g stroke="${ink}" stroke-width="1.8" fill="${ink}">
+      <line x1="3" y1="121" x2="326" y2="121"/><line x1="3" y1="112" x2="3" y2="130"/><line x1="-1" y1="127" x2="8" y2="115"/>
+      <path d="M335 121 L321 115.5 L321 126.5 Z" stroke="none"/><line x1="336" y1="112" x2="336" y2="130"/></g>
+      ${SETTINGS.slogan ? `<text x="170" y="148" text-anchor="middle" font-family="Lato,'Segoe UI',Arial,sans-serif" font-style="italic" font-size="16.5" fill="${dark ? '#FFFFFF' : green}">${esc(SETTINGS.slogan)}</text>` : ''}` : ''}
+  </svg>`;
 }
 
 function toast(msg, err = false) {
@@ -403,7 +409,7 @@ function formModal(title, fields, values, onSubmit, opts = {}) {
 const VIEWS = {};
 function render() {
   if (!$('#app') || $('#app').hidden) return;
-  document.querySelectorAll('[data-logo]').forEach(el => el.innerHTML = logoHTML());
+  document.querySelectorAll('header [data-logo]').forEach(el => el.innerHTML = logoHTML(false, true));
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.view === VIEW));
   const y = window.scrollY;
   $('#view').innerHTML = VIEWS[VIEW]();
@@ -1087,6 +1093,11 @@ function showLogin(msg = '') {
 if (DEMO) {
   USER = { displayName: '', email: 'demo' };
   showApp();
+} else if (SDK_KO) {
+  // Jamais de bascule silencieuse en mode démo : on bloque et on explique
+  showLogin('');
+  $('#btn-login').hidden = true;
+  $('#login-err').innerHTML = 'Firebase n\'a pas pu être chargé (connexion, VPN ou bloqueur de publicités ?).<br>Vérifiez la connexion puis rechargez la page (Ctrl + F5).';
 } else {
   firebase.initializeApp(FIREBASE_CONFIG);
   Store.fs = firebase.firestore();
