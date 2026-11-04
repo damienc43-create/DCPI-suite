@@ -252,7 +252,7 @@ const FIREBASE_CONFIG = {
 const ALLOWED_EMAIL = "damienc43@gmail.com";
 
 /* ===================================================================== */
-const APP_VERSION = '1.0';
+const APP_VERSION = '1.8';
 const DEMO = FIREBASE_CONFIG.apiKey === 'A_REMPLIR';
 const SDK_KO = !DEMO && typeof firebase === 'undefined';  // config présente mais Firebase non chargé
 const COLS = ['clients', 'interactions', 'projets', 'pointages', 'partenaires', 'devis'];
@@ -1295,27 +1295,29 @@ function ficheHTML() {
   const contact = (c.contacts || []).find(x => x.principal) || (c.contacts || [])[0];
   const ref = `FP-${per.du.slice(0, 7).replace('-', '')}-${FI.projetId ? byId('projets', FI.projetId).code : clientCode(c)}`;
   const S = SETTINGS;
-  let rows = '', totH = 0, totM = 0, hasM = false;
+  let rows = '', totH = 0, totHq = 0, totM = 0, hasM = false;
   const colspan = FI.detail ? 4 : 1;
+  // Majorations : colonnes « heures facturées » (= heures × (1 + majoration)) et jours facturés
+  const MAJ = pts.some(x => majPt(x)), nc = MAJ ? 3 : 2;
+  const heq = x => x.heures * (1 + majPt(x) / 100);
+  const cells = (h, hq) => MAJ ? `<td class="num">${num(h)}</td><td class="num">${num(hq)}</td><td class="num">${num(jours(hq))}</td>` : `<td class="num">${num(h)}</td><td class="num">${num(jours(h))}</td>`;
   for (const p of groups) {
-    const items = pts.filter(x => x.projetId === p.id), h = sum(items, x => x.heures);
-    totH += h;
-    rows += `<tr class="sub"><td colspan="${colspan + 2}">${esc(p.code)} — ${esc(p.nom)}${p.refClient ? ` <span style="font-weight:400">(réf. ${esc(p.refClient)})</span>` : ''}</td></tr>`;
-    if (FI.detail) rows += items.map(x => `<tr><td>${fmtDate(x.date)}${majPt(x) ? `<br><span class="f-maj">${esc(majAuto(x.date).lib || 'Majoré')} +${majPt(x)} %</span>` : ''}</td><td>${esc(tacheLabel(p, p.taches?.find(t => t.id === x.tacheId)))}</td><td>${esc(x.description || '')}</td><td>${esc(x.lieu || '')}</td><td class="num">${num(x.heures)}</td><td class="num">${num(jours(x.heures))}</td></tr>`).join('');
-    const hMaj = sum(items.filter(x => majPt(x)), x => x.heures);
-    rows += `<tr class="sub"><td colspan="${colspan}" style="text-align:right">Sous-total ${esc(p.code)}</td><td class="num">${num(h)}</td><td class="num">${num(jours(h))}</td></tr>`;
-    if (hMaj) rows += `<tr><td colspan="${colspan}" style="text-align:right" class="f-maj">dont heures majorées (week-end / férié)</td><td class="num f-maj">${num(hMaj)}</td><td class="num f-maj">${num(jours(hMaj))}</td></tr>`;
+    const items = pts.filter(x => x.projetId === p.id), h = sum(items, x => x.heures), hq = sum(items, heq);
+    totH += h; totHq += hq;
+    rows += `<tr class="sub"><td colspan="${colspan + nc}">${esc(p.code)} — ${esc(p.nom)}${p.refClient ? ` <span style="font-weight:400">(réf. ${esc(p.refClient)})</span>` : ''}</td></tr>`;
+    if (FI.detail) rows += items.map(x => `<tr><td>${fmtDate(x.date)}${majPt(x) ? `<br><span class="f-maj">${esc(majAuto(x.date).lib || 'Majoré')} +${majPt(x)} %</span>` : ''}</td><td>${esc(tacheLabel(p, p.taches?.find(t => t.id === x.tacheId)))}</td><td>${esc(x.description || '')}</td><td>${esc(x.lieu || '')}</td>${cells(x.heures, heq(x))}</tr>`).join('');
+    rows += `<tr class="sub"><td colspan="${colspan}" style="text-align:right">Sous-total ${esc(p.code)}</td>${cells(h, hq)}</tr>`;
     if (FI.montant && p.facturation !== 'Forfait' && p.tjm) {
       hasM = true; const base = jours(h) * p.tjm, m = sum(items, x => valeurPt(x, p)); totM += m;
-      rows += `<tr class="mt"><td colspan="${colspan}" style="text-align:right">Montant HT (${num(jours(h))} j × ${eur(p.tjm)})</td><td colspan="2" class="num">${eur(base)}</td></tr>`;
+      rows += `<tr class="mt"><td colspan="${colspan}" style="text-align:right">Montant HT (${num(jours(h))} j × ${eur(p.tjm)})</td><td colspan="${nc}" class="num">${eur(base)}</td></tr>`;
       if (m - base > 0.005) {
         const det = [...new Set(items.filter(x => majPt(x)).map(majPt))].map(pc => { const hh = sum(items.filter(x => majPt(x) === pc), x => x.heures); return `${num(jours(hh))} j × ${eur(p.tjm)} × ${pc} %`; }).join(' + ');
-        rows += `<tr class="mt"><td colspan="${colspan}" style="text-align:right">Majorations (${det})</td><td colspan="2" class="num">${eur(m - base)}</td></tr>`;
+        rows += `<tr class="mt"><td colspan="${colspan}" style="text-align:right">Majorations (${det})</td><td colspan="${nc}" class="num">${eur(m - base)}</td></tr>`;
       }
     }
   }
-  rows += `<tr class="tot"><td colspan="${colspan}" style="text-align:right">TOTAL PÉRIODE</td><td class="num">${num(totH)} h</td><td class="num">${num(jours(totH))} j</td></tr>`;
-  if (hasM) rows += `<tr class="mt"><td colspan="${colspan}" style="text-align:right">TOTAL HT</td><td colspan="2" class="num">${eur(totM)}</td></tr>`;
+  rows += `<tr class="tot"><td colspan="${colspan}" style="text-align:right">TOTAL PÉRIODE</td>${MAJ ? `<td class="num">${num(totH)} h</td><td class="num">${num(totHq)} h</td><td class="num">${num(jours(totHq))} j</td>` : `<td class="num">${num(totH)} h</td><td class="num">${num(jours(totH))} j</td>`}</tr>`;
+  if (hasM) rows += `<tr class="mt"><td colspan="${colspan}" style="text-align:right">TOTAL HT</td><td colspan="${nc}" class="num">${eur(totM)}</td></tr>`;
   return `<div class="fiche">
     <div class="f-head">
       <div><div class="logo dark">${logoHTML(true)}</div>
@@ -1328,8 +1330,9 @@ function ficheHTML() {
       <div class="f-block"><b class="h">Intervenant</b>${esc(S.signataire || USER?.displayName || S.raisonSociale || S.nom)}<br>
         Base de calcul : 1 jour = ${num(hJ())} h<br>${FI.factOnly ? 'Temps facturable uniquement' : 'Tous les temps pointés'}</div>
     </div>
-    <table><thead><tr>${FI.detail ? '<th>Date</th><th>Tâche</th><th>Travaux réalisés</th><th>Lieu</th>' : '<th>Projet</th>'}<th class="num">Heures</th><th class="num">Jours</th></tr></thead>
+    <table><thead><tr>${FI.detail ? '<th>Date</th><th>Tâche</th><th>Travaux réalisés</th><th>Lieu</th>' : '<th>Projet</th>'}${MAJ ? '<th class="num">Heures réelles</th><th class="num">Heures facturées</th><th class="num">Jours facturés</th>' : '<th class="num">Heures</th><th class="num">Jours</th>'}</tr></thead>
       <tbody>${rows}</tbody></table>
+    ${MAJ ? `<p class="f-maj" style="margin:6px 0 0">Heures facturées = heures réelles × (1 + majoration). Samedi +${num(SETTINGS.majSamedi || 0, 0)} % · dimanche et jours fériés +${num(SETTINGS.majDimanche || 0, 0)} %.</p>` : ''}
     <div class="f-visa">
       <div><b>L'intervenant</b>${esc(S.signataire || USER?.displayName || '')}${S.signataire || USER?.displayName ? '<br>' : ''}Date : ${FI.signer ? fmtDate(todayStr()) : ''}<br>
         ${FI.signer && S.signature ? `<img src="${S.signature}" alt="Signature" class="f-sig">` : '<br>Signature :'}</div>
@@ -1578,7 +1581,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#modal-
 function showApp() {
   $('#login').hidden = true; $('#app').hidden = false;
   $('#demo-banner').hidden = !DEMO;
-  $('#who').innerHTML = DEMO ? 'Mode démo' : `${esc(USER.email)}<button id="btn-logout">Déconnexion</button>`;
+  $('#who').innerHTML = (DEMO ? 'Mode démo' : `${esc(USER.email)}<button id="btn-logout">Déconnexion</button>`) + `<div style="opacity:.6;font-size:.72rem;margin-top:2px">version ${APP_VERSION}</div>`;
   const lo = $('#btn-logout'); if (lo) lo.onclick = () => firebase.auth().signOut();
   autoBackupDone = false; Store.start(); render();
 }
