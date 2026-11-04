@@ -221,7 +221,7 @@ const DEMO = FIREBASE_CONFIG.apiKey === 'A_REMPLIR';
 const SDK_KO = !DEMO && typeof firebase === 'undefined';  // config présente mais Firebase non chargé
 const COLS = ['clients', 'interactions', 'projets', 'pointages'];
 const DEFAULT_SETTINGS = {
-  nom: 'DCPI', mention: 'Projets & Ingénierie', slogan: 'Vos projets, de l\'idée à la réalisation.', raisonSociale: '', adresse: '', cpVille: '',
+  nom: 'DCPI', mention: 'Projets & Ingénierie', slogan: 'Vos projets, de l\'idée à la réalisation.', raisonSociale: '', adresse: '', cp: '', ville: '',
   siret: '', email: '', tel: '', heuresJour: 7, lastBackup: ''
 };
 const CLIENT_STATUTS = ['Prospect', 'Client', 'Inactif'];
@@ -261,6 +261,11 @@ const hJ = () => +SETTINGS.heuresJour || 7;
 const jours = h => (+h || 0) / hJ();
 const slug = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const badge = s => `<span class="badge b-${slug(s)}">${esc(s)}</span>`;
+// CP + ville (compatibilité avec l'ancien champ unique cpVille)
+const splitCpVille = s => { const m = String(s || '').trim().match(/^(\d{5})\s*(.*)$/); return m ? { cp: m[1], ville: m[2] } : { cp: '', ville: String(s || '').trim() }; };
+const withCpVille = o => (o && !o.cp && !o.ville && o.cpVille) ? { ...o, ...splitCpVille(o.cpVille) } : o;
+const cpv = o => { const x = withCpVille(o || {}); return [x.cp, x.ville].filter(Boolean).join(' '); };
+const nomContact = x => [x?.prenom, x?.nom].filter(Boolean).join(' ');
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const sum = (arr, f) => arr.reduce((a, x) => a + (+f(x) || 0), 0);
 const byId = (col, id) => DB[col].find(x => x.id === id);
@@ -400,6 +405,7 @@ function formModal(title, fields, values, onSubmit, opts = {}) {
     try { if (await onSubmit(out) !== false) closeModal(); }
     catch (err) { console.error(err); toast('Erreur : ' + err.message, true); }
   };
+  opts.onOpen?.(form);
   setTimeout(() => { if (!form.contains(document.activeElement)) form.querySelector('input,select,textarea')?.focus(); }, 30);
 }
 
@@ -752,15 +758,16 @@ const CLIENT_FIELDS = [
   { k: 'secteur', label: 'Secteur d\'activité' },
   { k: 'siret', label: 'SIRET' },
   { k: 'adresse', label: 'Adresse', full: true },
-  { k: 'cpVille', label: 'CP et ville' },
+  { k: 'cp', label: 'Code postal', placeholder: 'ex. 43120' },
+  { k: 'ville', label: 'Ville' },
   { k: 'tel', label: 'Téléphone' },
   { k: 'site', label: 'Site web' },
   { k: 'source', label: 'Origine du contact', placeholder: 'réseau, recommandation, salon…' },
   { k: 'notes', label: 'Notes', type: 'textarea', full: true }
 ];
 function editClient(c) {
-  formModal(c ? 'Modifier le client' : 'Nouveau client', CLIENT_FIELDS, c, async v => {
-    const id = await Store.save('clients', { ...(c || { contacts: [] }), ...v });
+  formModal(c ? 'Modifier le client' : 'Nouveau client', CLIENT_FIELDS, withCpVille(c), async v => {
+    const id = await Store.save('clients', { ...(c || { contacts: [] }), ...v, cpVille: '' });
     toast(c ? 'Client modifié' : 'Client créé'); CRM.sel = id; if (VIEW !== 'crm') VIEW = 'crm'; render();
   }, {
     onDelete: c ? async () => {
@@ -770,14 +777,29 @@ function editClient(c) {
         await Store.remove('clients', c.id);
       }, 'Client supprimé');
       CRM.sel = null; render();
-    } : null
+    } : null,
+    onOpen: villeAuto
+  });
+}
+// Code postal → propose la ou les communes (API publique geo.api.gouv.fr, sans clé)
+function villeAuto(form) {
+  const cp = form.elements.cp, ville = form.elements.ville; if (!cp || !ville) return;
+  const dl = document.createElement('datalist'); dl.id = 'dl-' + uid(); form.appendChild(dl); ville.setAttribute('list', dl.id);
+  cp.addEventListener('input', async () => {
+    const v = cp.value.trim(); if (!/^\d{5}$/.test(v)) return;
+    try {
+      const r = await fetch(`https://geo.api.gouv.fr/communes?codePostal=${v}&fields=nom&format=json`);
+      const noms = (await r.json()).map(x => x.nom).sort((a, b) => a.localeCompare(b, 'fr'));
+      dl.innerHTML = noms.map(n => `<option value="${esc(n)}">`).join('');
+      if (noms.length === 1 || (noms.length && !ville.value.trim())) ville.value = noms[0];
+    } catch (e) { /* hors ligne : saisie manuelle */ }
   });
 }
 function editContact(cid, idx) {
   const c = byId('clients', cid); if (!c) return;
   const contacts = [...(c.contacts || [])], ct = idx != null ? contacts[idx] : null;
   formModal(ct ? 'Modifier le contact' : 'Nouveau contact', [
-    { k: 'nom', label: 'Nom', required: true }, { k: 'fonction', label: 'Fonction' },
+    { k: 'prenom', label: 'Prénom' }, { k: 'nom', label: 'Nom', required: true }, { k: 'fonction', label: 'Fonction' },
     { k: 'email', label: 'E-mail', type: 'email' }, { k: 'tel', label: 'Téléphone' },
     { k: 'principal', label: 'Contact principal (apparaît sur les fiches)', type: 'checkbox' }
   ], ct, async v => {
@@ -800,11 +822,11 @@ function editInteraction(cid, it) {
 function crmListHTML() {
   const q = CRM.q.toLowerCase();
   const list = DB.clients.filter(c => (!CRM.statut || c.statut === CRM.statut) &&
-    (!q || [c.nom, c.secteur, c.cpVille, ...(c.contacts || []).map(x => x.nom)].join(' ').toLowerCase().includes(q)))
+    (!q || [c.nom, c.secteur, cpv(c), ...(c.contacts || []).map(nomContact)].join(' ').toLowerCase().includes(q)))
     .sort((a, b) => a.nom.localeCompare(b.nom));
   return list.length ? list.map(c => `<div class="list-item ${c.id === CRM.sel ? 'on' : ''}" data-act="crm-open" data-id="${c.id}">
       <div class="row"><span class="t">${esc(c.nom)}</span><div class="spacer"></div>${badge(c.statut)}</div>
-      <div class="small muted">${esc([c.secteur, c.cpVille].filter(Boolean).join(' · '))}</div></div>`).join('')
+      <div class="small muted">${esc([c.secteur, cpv(c)].filter(Boolean).join(' · '))}</div></div>`).join('')
     : '<div class="empty">Aucun client.</div>';
 }
 VIEWS.crm = () => {
@@ -833,7 +855,7 @@ function clientDetail(c) {
       <button class="btn sm" data-act="client-edit" data-id="${c.id}">Modifier</button></div>
     <div class="info">
       ${c.secteur ? `<div><small>Secteur</small>${esc(c.secteur)}</div>` : ''}
-      ${c.adresse || c.cpVille ? `<div><small>Adresse</small>${esc(c.adresse)}<br>${esc(c.cpVille)}</div>` : ''}
+      ${c.adresse || cpv(c) ? `<div><small>Adresse</small>${esc(c.adresse)}<br>${esc(cpv(c))}</div>` : ''}
       ${c.tel ? `<div><small>Téléphone</small>${esc(c.tel)}</div>` : ''}
       ${c.site ? `<div><small>Site</small>${esc(c.site)}</div>` : ''}
       ${c.siret ? `<div><small>SIRET</small>${esc(c.siret)}</div>` : ''}
@@ -842,7 +864,7 @@ function clientDetail(c) {
     </div>
     ${c.notes ? `<p class="small" style="white-space:pre-wrap">${esc(c.notes)}</p>` : ''}
     <div class="sec"><div class="row"><h3 style="margin:0">Contacts</h3><div class="spacer"></div><button class="btn sm" data-act="contact-new" data-id="${c.id}">+ Contact</button></div>
-      ${(c.contacts || []).length ? c.contacts.map((x, i) => `<div class="journal-item row"><div><b>${esc(x.nom)}</b>${x.principal ? ' <span class="badge">principal</span>' : ''} <span class="muted">${esc(x.fonction || '')}</span><br>
+      ${(c.contacts || []).length ? c.contacts.map((x, i) => `<div class="journal-item row"><div><b>${esc(nomContact(x))}</b>${x.principal ? ' <span class="badge">principal</span>' : ''} <span class="muted">${esc(x.fonction || '')}</span><br>
         <span class="small">${x.email ? `<a href="mailto:${esc(x.email)}">${esc(x.email)}</a>` : ''} ${x.tel ? ' · <a href="tel:' + esc(x.tel) + '">' + esc(x.tel) + '</a>' : ''}</span></div>
         <div class="spacer"></div><button class="btn sm link" data-act="contact-edit" data-id="${c.id}" data-t="${i}">Modifier</button></div>`).join('') : '<div class="empty">Aucun contact.</div>'}
     </div>
@@ -896,12 +918,12 @@ function ficheHTML() {
   return `<div class="fiche">
     <div class="f-head">
       <div><div class="logo dark">${logoHTML(true)}</div>
-        <div class="f-ident">${esc(S.raisonSociale || S.nom)}<br>${esc(S.adresse)}${S.adresse ? '<br>' : ''}${esc(S.cpVille)}<br>${esc([S.email, S.tel].filter(Boolean).join(' · '))}</div></div>
+        <div class="f-ident">${esc(S.raisonSociale || S.nom)}<br>${esc(S.adresse)}${S.adresse ? '<br>' : ''}${esc(cpv(S))}<br>${esc([S.email, S.tel].filter(Boolean).join(' · '))}</div></div>
       <div class="f-title"><h1>FICHE DE POINTAGE</h1><div>Réf. ${esc(ref)}</div><div>Période : <b>${esc(per.label)}</b></div><div>Éditée le ${fmtDate(todayStr())}</div></div>
     </div>
     <div class="f-blocks">
-      <div class="f-block"><b class="h">Client</b><b>${esc(c.nom)}</b><br>${esc(c.adresse || '')}${c.adresse ? '<br>' : ''}${esc(c.cpVille || '')}
-        ${contact ? `<br>À l'attention de : ${esc(contact.nom)}${contact.fonction ? ', ' + esc(contact.fonction) : ''}` : ''}</div>
+      <div class="f-block"><b class="h">Client</b><b>${esc(c.nom)}</b><br>${esc(c.adresse || '')}${c.adresse ? '<br>' : ''}${esc(cpv(c))}
+        ${contact ? `<br>À l'attention de : ${esc(nomContact(contact))}${contact.fonction ? ', ' + esc(contact.fonction) : ''}` : ''}</div>
       <div class="f-block"><b class="h">Intervenant</b>${esc(USER?.displayName || S.raisonSociale || S.nom)}<br>
         Base de calcul : 1 jour = ${num(hJ())} h<br>${FI.factOnly ? 'Temps facturable uniquement' : 'Tous les temps pointés'}</div>
     </div>
@@ -911,7 +933,7 @@ function ficheHTML() {
       <div><b>L'intervenant</b>Date :<br><br>Signature :</div>
       <div><b>Le client — Bon pour accord</b>Nom, fonction :<br><br>Date :<br><br>Signature et cachet :</div>
     </div>
-    <div class="f-foot">${esc([S.raisonSociale || S.nom, S.siret ? 'SIRET ' + S.siret : '', S.adresse, S.cpVille].filter(Boolean).join(' · '))}</div>
+    <div class="f-foot">${esc([S.raisonSociale || S.nom, S.siret ? 'SIRET ' + S.siret : '', S.adresse, cpv(S)].filter(Boolean).join(' · '))}</div>
   </div>`;
 }
 VIEWS.fiches = () => {
@@ -962,8 +984,8 @@ VIEWS.reglages = () => `
     <p class="small muted">Ces informations apparaissent en en-tête et pied des fiches de pointage.</p>
     <form id="set-form" class="grid-form">
       ${[{ k: 'nom', label: 'Nom commercial' }, { k: 'mention', label: 'Mention sous le logo' }, { k: 'slogan', label: 'Slogan (fiches)' }, { k: 'raisonSociale', label: 'Raison sociale' }, { k: 'siret', label: 'SIRET' },
-         { k: 'adresse', label: 'Adresse', full: true }, { k: 'cpVille', label: 'CP et ville' }, { k: 'email', label: 'E-mail' }, { k: 'tel', label: 'Téléphone' },
-         { k: 'heuresJour', label: 'Heures par jour (conversion h → j)', type: 'number', step: '0.25', min: 1 }].map(f => fieldHTML(f, SETTINGS[f.k])).join('')}
+         { k: 'adresse', label: 'Adresse', full: true }, { k: 'cp', label: 'Code postal' }, { k: 'ville', label: 'Ville' }, { k: 'email', label: 'E-mail' }, { k: 'tel', label: 'Téléphone' },
+         { k: 'heuresJour', label: 'Heures par jour (conversion h → j)', type: 'number', step: '0.25', min: 1 }].map(f => fieldHTML(f, withCpVille(SETTINGS)[f.k])).join('')}
       <div class="full"><button class="btn primary" type="submit">Enregistrer</button></div>
     </form>
   </div>
@@ -983,10 +1005,12 @@ VIEWS.reglages_after = () => {
   const f = $('#set-form');
   if (f) f.onsubmit = e => {
     e.preventDefault();
-    const v = {}; ['nom', 'mention', 'slogan', 'raisonSociale', 'siret', 'adresse', 'cpVille', 'email', 'tel'].forEach(k => v[k] = f.elements[k].value.trim());
+    const v = {}; ['nom', 'mention', 'slogan', 'raisonSociale', 'siret', 'adresse', 'cp', 'ville', 'email', 'tel'].forEach(k => v[k] = f.elements[k].value.trim());
+    v.cpVille = '';
     v.heuresJour = parseFloat(String(f.elements.heuresJour.value).replace(',', '.')) || 7;
     safe(() => Store.saveSettings(v), 'Réglages enregistrés');
   };
+  if (f) villeAuto(f);
   const imp = $('#imp-file');
   if (imp) imp.onchange = () => { const file = imp.files[0]; if (file) importJSON(file); imp.value = ''; };
 };
