@@ -126,6 +126,7 @@ tr.click{cursor:pointer} tr.click:hover td{background:#F8F7F2}
 .wk-card{border-left:4px solid var(--vert);background:#F7F6F1;border-radius:6px;padding:6px 8px;margin-bottom:6px;cursor:pointer;font-size:.82rem}
 .wk-card:hover{background:#EFEDE5}
 .wk-h{font-weight:800;font-size:.78rem}
+.wk-code{font-family:Consolas,'Courier New',monospace;font-size:.72rem;color:var(--muted)}
 .wk-sub{color:var(--ink);font-size:.78rem}
 .wk-desc{color:var(--muted);font-size:.76rem;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .wk-add{width:100%;border:1px dashed #D6D2C6;background:none;border-radius:6px;padding:9px;color:var(--muted);cursor:pointer;font-size:.82rem}
@@ -255,7 +256,13 @@ const COLS = ['clients', 'interactions', 'projets', 'pointages', 'partenaires', 
 const DEVIS_STATUTS = ['Brouillon', 'Envoyé', 'Accepté', 'Refusé', 'Expiré'];
 const DEFAULT_SETTINGS = {
   nom: 'DCPI', mention: 'Projets & Ingénierie', slogan: 'Vos projets, de l\'idée à la réalisation.', raisonSociale: '', adresse: '', cp: '', ville: '',
-  siret: '', email: '', tel: '', heuresJour: 7, lastBackup: ''
+  siret: '', email: '', tel: '', heuresJour: 7, lastBackup: '',
+  // Référentiel WBS niveau 2 (standard MPE) — modifiable dans Réglages
+  wbsN2: [
+    { n: 0, lib: 'CHIFFRAGE' }, { n: 1, lib: 'PILOTAGE & GESTION DE PROJET' }, { n: 2, lib: 'ÉTUDES, CONCEPTION MÉCANIQUES' },
+    { n: 3, lib: 'ÉQUIPEMENTS & FOURNITURES PROCESS' }, { n: 4, lib: 'CONTRÔLE COMMANDE : ÉLECTRICITÉ/AUTOMATISME' },
+    { n: 5, lib: 'MONTAGE, INSTALLATION & MISE EN SERVICE' }, { n: 6, lib: 'LOGISTIQUE' }, { n: 7, lib: 'DIVERS & SERVICES' }
+  ]
 };
 const CLIENT_STATUTS = ['Prospect', 'Client', 'Inactif'];
 const PROJET_STATUTS = ['Proposition', 'En cours', 'En pause', 'Terminé', 'Perdu'];
@@ -300,6 +307,11 @@ const badge = s => `<span class="badge b-${slug(s)}">${esc(s)}</span>`;
 const splitCpVille = s => { const m = String(s || '').trim().match(/^(\d{5})\s*(.*)$/); return m ? { cp: m[1], ville: m[2] } : { cp: '', ville: String(s || '').trim() }; };
 const withCpVille = o => (o && !o.cp && !o.ville && o.cpVille) ? { ...o, ...splitCpVille(o.cpVille) } : o;
 const cpv = o => { const x = withCpVille(o || {}); return [x.cp, x.ville].filter(Boolean).join(' '); };
+// WBS : code tâche = CODEPROJET-N2-N3 (ex. MJVA-01-7-1)
+const wbsList = () => [...(SETTINGS.wbsN2 || [])].sort((a, b) => a.n - b.n);
+const wbsLib = n => wbsList().find(w => +w.n === +n)?.lib || '';
+const tacheCode = (p, t) => t ? (t.n2 != null && t.n2 !== '' ? `${p?.code || '?'}-${t.n2}-${t.n3}` : '') : '';
+const tacheLabel = (p, t) => t ? [tacheCode(p, t), t.nom].filter(Boolean).join(' · ') : '';
 const nomContact = x => [x?.prenom, x?.nom].filter(Boolean).join(' ');
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const sum = (arr, f) => arr.reduce((a, x) => a + (+f(x) || 0), 0);
@@ -518,12 +530,12 @@ function editPointage(x, date) {
   const prj = projetsSaisissables(x?.projetId);
   if (!prj.length) { toast('Créez d\'abord un projet actif (Liste des projets).', true); return; }
   const v0 = x || { date: date || todayStr(), projetId: PT.last.projetId && prj.some(p => p.id === PT.last.projetId) ? PT.last.projetId : '', lieu: PT.last.lieu, facturable: true };
-  const tOpts = pid => [{ v: '', l: '(aucune)' }, ...((byId('projets', pid)?.taches) || []).map(t => ({ v: t.id, l: t.nom }))];
+  const tOpts = pid => { const p = byId('projets', pid); return [{ v: '', l: '(aucune)' }, ...((p?.taches) || []).filter(t => t.pointable !== false && (t.statut !== 'Fait' || t.id === x?.tacheId)).sort((a, b) => (+a.n2 - +b.n2) || (+a.n3 - +b.n3)).map(t => ({ v: t.id, l: tacheLabel(p, t) }))]; };
   formModal(x ? 'Modifier le pointage' : 'Nouveau pointage', [
     { k: 'date', label: 'Date', type: 'date', required: true },
     { k: 'heures', label: 'Heures', type: 'number', step: '0.25', min: 0, required: true, placeholder: 'ex. 3,5' },
     { k: 'projetId', label: 'Projet', type: 'select', required: true, full: true, options: [{ v: '', l: '— Choisir —' }, ...prj.map(p => ({ v: p.id, l: `${projetLabel(p)} (${clientNom(p.clientId)})` }))] },
-    { k: 'tacheId', label: 'Tâche', type: 'select', options: tOpts(v0.projetId) },
+    { k: 'tacheId', label: 'Tâche (WBS N3)', type: 'select', options: tOpts(v0.projetId) },
     { k: 'lieu', label: 'Lieu', type: 'select', options: LIEUX },
     { k: 'facturable', label: 'Facturable', type: 'checkbox' },
     { k: 'description', label: 'Description du travail', full: true, placeholder: 'ex. Réunion de lancement, revue du cahier des charges…' }
@@ -550,6 +562,7 @@ function cardPt(x) {
   const pj = byId('projets', x.projetId), tk = pj?.taches?.find(t => t.id === x.tacheId);
   return `<div class="wk-card" style="border-left-color:${prjColor(x.projetId)}" data-act="pt-edit" data-id="${x.id}" title="${esc(clientNom(pj?.clientId))}">
     <div><b style="color:${prjColor(x.projetId)}">${esc(pj?.code || '?')}</b> <span class="wk-h">${num(x.heures)} h</span>${x.facturable ? '' : ' <span class="small muted">NF</span>'}</div>
+    ${tk && tacheCode(pj, tk) ? `<div class="wk-code">${esc(tacheCode(pj, tk))}</div>` : ''}
     <div class="wk-sub">${esc(tk?.nom || pj?.nom || 'Projet supprimé')}</div>
     ${x.description ? `<div class="wk-desc">${esc(x.description)}</div>` : ''}</div>`;
 }
@@ -708,40 +721,62 @@ function projetDetail(p) {
       ${p.budgetJours ? `<div class="kpi"><b class="${p.budgetJours - j < 0 ? 'late' : ''}">${num(p.budgetJours - j)} j</b><span>Reste au budget</span></div>` : ''}
     </div>
     <div class="sec"><div class="row"><h3 style="margin:0">Tâches</h3><div class="spacer"></div><button class="btn sm" data-act="tache-new" data-id="${p.id}">+ Tâche</button></div>
-      ${taches.length ? `<div class="table-wrap"><table><thead><tr><th>Tâche</th><th>Statut</th><th>Échéance</th><th class="num">Prévu</th><th class="num">Pointé</th><th></th></tr></thead><tbody>
-      ${taches.map(t => {
-        const tj = jours(sum(pts.filter(x => x.tacheId === t.id), x => x.heures));
-        return `<tr><td>${esc(t.nom)}</td>
+      ${taches.length ? `<div class="table-wrap"><table><thead><tr><th>Code</th><th>WBS (N2)</th><th>Tâche (N3)</th><th>Type</th><th>Statut</th><th>Échéance</th><th class="num">Prévu</th><th class="num">Pointé</th><th></th></tr></thead><tbody>
+      ${[...taches].sort((a, b) => (+a.n2 - +b.n2) || (+a.n3 - +b.n3)).map(t => {
+        const tj = jours(sum(pts.filter(x => x.tacheId === t.id), x => x.heures)), ach = t.pointable === false;
+        return `<tr><td style="white-space:nowrap"><code>${esc(tacheCode(p, t))}</code></td><td class="small">${esc(t.n2 != null ? wbsLib(t.n2) : '')}</td><td>${esc(t.nom)}</td>
+          <td class="small" style="white-space:nowrap">${ach ? '💰 Achat' : '⏱ Temps'}</td>
           <td><select data-chg="tache-statut" data-id="${p.id}" data-t="${t.id}" style="width:auto;padding:3px 6px">${optHTML(TACHE_STATUTS, t.statut)}</select></td>
           <td class="${t.echeance && t.echeance < todayStr() && t.statut !== 'Fait' ? 'late' : ''}">${fmtDate(t.echeance)}</td>
-          <td class="num">${t.joursPrevus ? num(t.joursPrevus) + ' j' : ''}</td><td class="num ${t.joursPrevus && tj > t.joursPrevus ? 'late' : ''}">${num(tj)} j</td>
+          <td class="num">${ach ? (t.montantPrevu ? eur(t.montantPrevu) : '') : (t.joursPrevus ? num(t.joursPrevus) + ' j' : '')}</td><td class="num ${!ach && t.joursPrevus && tj > t.joursPrevus ? 'late' : ''}">${ach ? '' : num(tj) + ' j'}</td>
           <td class="num"><button class="btn sm link" data-act="tache-edit" data-id="${p.id}" data-t="${t.id}">Modifier</button></td></tr>`;
-      }).join('')}</tbody></table></div>` : '<div class="empty">Aucune tâche. Les tâches sont facultatives : elles permettent de détailler les pointages.</div>'}
+      }).join('')}</tbody></table></div>` : '<div class="empty">Aucune tâche. Les tâches (WBS N3) se codent CODEPROJET-N2-N3 ; seules les tâches « temps » sont proposées au pointage.</div>'}
     </div>
     <div class="sec"><h3>Derniers pointages</h3>
-      ${pts.length ? `<div class="table-wrap"><table><tbody>${pts.slice(0, 15).map(x => `<tr><td>${fmtDate(x.date)}</td><td>${esc(taches.find(t => t.id === x.tacheId)?.nom || '')}</td><td class="small">${esc(x.description || '')}</td><td class="num">${num(x.heures)} h${x.facturable ? '' : ' <span class="small muted">(NF)</span>'}</td></tr>`).join('')}</tbody></table></div>
+      ${pts.length ? `<div class="table-wrap"><table><tbody>${pts.slice(0, 15).map(x => `<tr><td>${fmtDate(x.date)}</td><td class="small">${esc(tacheLabel(p, taches.find(t => t.id === x.tacheId)))}</td><td class="small">${esc(x.description || '')}</td><td class="num">${num(x.heures)} h${x.facturable ? '' : ' <span class="small muted">(NF)</span>'}</td></tr>`).join('')}</tbody></table></div>
         ${pts.length > 15 ? `<p class="small muted">… et ${pts.length - 15} autres.</p>` : ''}` : '<div class="empty">Aucun pointage.</div>'}
     </div>
   </div>`;
+}
+function nextN3(p, n2, exceptId) {
+  return (p.taches || []).filter(t => +t.n2 === +n2 && t.id !== exceptId).map(t => +t.n3 || 0).reduce((a, b) => Math.max(a, b), 0) + 1;
 }
 function editTache(pid, tid) {
   const p = byId('projets', pid); if (!p) return;
   const taches = [...(p.taches || [])];
   const t = taches.find(x => x.id === tid);
-  formModal(t ? 'Modifier la tâche' : 'Nouvelle tâche', [
-    { k: 'nom', label: 'Intitulé', required: true, full: true },
-    { k: 'statut', label: 'Statut', type: 'select', options: TACHE_STATUTS, def: 'À faire' },
+  const W = wbsList();
+  if (!W.length) { toast('Définissez d\'abord le référentiel WBS (N2) dans Réglages', true); return; }
+  const v0 = t ? { ...t, type: t.pointable === false ? 'achat' : 'temps' } : { n2: W[0].n, n3: nextN3(p, W[0].n), type: 'temps', statut: 'À faire' };
+  formModal(t ? `Modifier la tâche ${tacheCode(p, t)}` : 'Nouvelle tâche (WBS N3)', [
+    { k: 'n2', label: 'WBS (N2)', type: 'select', full: true, options: W.map(w => ({ v: w.n, l: `${w.n} — ${w.lib}` })) },
+    { k: 'n3', label: 'N° N3', type: 'number', step: '1', min: 1, required: true },
+    { k: 'nom', label: 'Libellé tâche', required: true, placeholder: 'ex. Suivi de chantier' },
+    { k: 'type', label: 'Type', type: 'select', options: [{ v: 'temps', l: '⏱ Pointable (temps)' }, { v: 'achat', l: '💰 Achat / matériel (non pointable)' }] },
+    { k: 'statut', label: 'Statut', type: 'select', options: TACHE_STATUTS },
     { k: 'echeance', label: 'Échéance', type: 'date' },
-    { k: 'joursPrevus', label: 'Jours prévus', type: 'number', step: '0.5', min: 0 }
-  ], t, async v => {
+    { k: 'joursPrevus', label: 'Jours prévus', type: 'number', step: '0.5', min: 0 },
+    { k: 'montantPrevu', label: 'Montant prévu HT (€) — achats', type: 'number', step: '0.01', min: 0 }
+  ], v0, async v => {
+    v.n2 = +v.n2; v.n3 = Math.round(+v.n3);
+    if (taches.some(x => x.id !== t?.id && +x.n2 === v.n2 && +x.n3 === v.n3)) { toast(`Le code ${p.code}-${v.n2}-${v.n3} existe déjà`, true); return false; }
+    v.pointable = v.type !== 'achat'; delete v.type;
+    if (!v.pointable && t && DB.pointages.some(x => x.tacheId === t.id)) { toast('Des heures sont pointées sur cette tâche : elle doit rester pointable.', true); return false; }
     if (t) Object.assign(t, v); else taches.push({ id: 't' + uid(), ...v });
     await Store.save('projets', { ...p, taches });
-    toast(t ? 'Tâche modifiée' : 'Tâche ajoutée');
+    toast(`Tâche ${p.code}-${v.n2}-${v.n3} ${t ? 'modifiée' : 'ajoutée'}`);
   }, {
     onDelete: t ? async () => {
       if (DB.pointages.some(x => x.tacheId === t.id)) { toast('Des pointages sont rattachés à cette tâche : passez-la plutôt en « Fait ».', true); return; }
       await safe(() => Store.save('projets', { ...p, taches: taches.filter(x => x.id !== t.id) }), 'Tâche supprimée');
-    } : null
+    } : null,
+    onOpen: form => {
+      const E = form.elements; let manuel = !!t;
+      E.n3.addEventListener('input', () => manuel = true);
+      E.n2.addEventListener('change', () => { if (!manuel) E.n3.value = nextN3(p, E.n2.value, t?.id); });
+      const tog = () => { const ach = E.type.value === 'achat'; E.joursPrevus.closest('.fld').hidden = ach; E.montantPrevu.closest('.fld').hidden = !ach; };
+      E.type.addEventListener('change', tog); tog();
+    }
   });
 }
 
@@ -977,7 +1012,7 @@ function clientDetail(c) {
     </div>
     <div class="sec"><div class="row"><h3 style="margin:0">Devis</h3><div class="spacer"></div><button class="btn sm" data-act="devis-new-for" data-id="${c.id}">+ Devis</button></div>
       ${(() => { const dv = DB.devis.filter(d => d.clientId === c.id).sort((a, b) => (b.numero || '').localeCompare(a.numero || ''));
-        return dv.length ? `<table><tbody>${dv.map(d => `<tr class="click" data-act="devis-edit" data-id="${d.id}"><td><b>${esc(d.numero)}</b> ${esc(d.objet)}</td><td>${badge(d.statut)}</td><td class="num">${eur(d.montantHT)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">Aucun devis.</div>'; })()}
+        return dv.length ? `<table><tbody>${dv.map(d => `<tr class="click" data-act="devis-edit" data-id="${d.id}"><td><b>${esc(d.numero)}</b> ${esc(d.objet)}</td><td>${badge(d.statut)}</td><td class="num">${montantDevisHTML(d)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">Aucun devis.</div>'; })()}
     </div>
     ${journalBlock('clients', c)}
   </div>`;
@@ -1000,9 +1035,10 @@ const DEVIS_FIELDS = () => [
   { k: 'statut', label: 'Statut', type: 'select', options: DEVIS_STATUTS, def: 'Brouillon' },
   { k: 'facturation', label: 'Type', type: 'select', options: FACTURATIONS, def: FACTURATIONS[0] },
   { k: 'validiteJours', label: 'Validité (jours)', type: 'number', step: '1', min: 0, def: 30 },
-  { k: 'jours', label: 'Nombre de jours', type: 'number', step: '0.5', min: 0 },
-  { k: 'tjm', label: 'TJM HT (€)', type: 'number', step: '1', min: 0 },
-  { k: 'montantHT', label: 'Montant HT (€)', type: 'number', step: '0.01', min: 0, required: true },
+  { k: 'unite', label: 'Unité de prix', type: 'select', options: ['Jour', 'Demi-journée'], def: 'Jour' },
+  { k: 'quantite', label: 'Nombre de jours', type: 'number', step: '0.5', min: 0 },
+  { k: 'prixUnitaire', label: 'Tarif jour HT (€)', type: 'number', step: '1', min: 0 },
+  { k: 'montantHT', label: 'Montant HT (€)', type: 'number', step: '0.01', min: 0 },
   { k: 'relance', label: 'Date de relance', type: 'date' },
   { k: 'relanceFaite', label: 'Relance faite', type: 'checkbox' },
   { k: 'dateDecision', label: 'Date de décision client', type: 'date' },
@@ -1010,11 +1046,19 @@ const DEVIS_FIELDS = () => [
   { k: 'notes', label: 'Notes (concurrence, motif de refus…)', type: 'textarea', full: true }
 ];
 function editDevis(d, presetClient) {
-  const v0 = d || { numero: nextDevisNumero(todayStr()), dateEmission: todayStr(), clientId: presetClient || '', validiteJours: 30, tjm: SETTINGS.tjmDefaut || null };
+  // compatibilité : anciens devis saisis en jours × TJM
+  if (d && d.quantite == null && (d.jours || d.tjm)) d = { ...d, unite: 'Jour', quantite: d.jours, prixUnitaire: d.tjm };
+  const v0 = d || { numero: nextDevisNumero(todayStr()), dateEmission: todayStr(), clientId: presetClient || '', validiteJours: 30, unite: 'Jour', prixUnitaire: SETTINGS.tjmDefaut || null };
   formModal(d ? `Devis ${d.numero}` : 'Nouveau devis', DEVIS_FIELDS(), v0, async v => {
     v.numero = v.numero.toUpperCase();
+    if (v.facturation === 'Forfait' && !(v.montantHT > 0)) { toast('Forfait : indiquez le montant HT', true); return false; }
+    if (v.facturation !== 'Forfait' && !(v.prixUnitaire > 0)) { toast('Régie : indiquez le tarif', true); return false; }
     if (DB.devis.some(x => x.numero === v.numero && x.id !== d?.id)) { toast('Ce numéro de devis existe déjà', true); return false; }
     if (['Accepté', 'Refusé'].includes(v.statut) && !v.dateDecision) v.dateDecision = todayStr();
+    // équivalents en jours / TJM pour le projet et les statistiques
+    const demi = v.unite === 'Demi-journée';
+    v.jours = v.quantite ? (demi ? v.quantite / 2 : v.quantite) : null;
+    v.tjm = v.prixUnitaire ? (demi ? v.prixUnitaire * 2 : v.prixUnitaire) : null;
     await Store.save('devis', { ...(d || {}), ...v });
     toast(d ? 'Devis modifié' : 'Devis créé');
     if (v.statut === 'Accepté' && !d?.projetId && d?.statut !== 'Accepté') toast('Devis accepté : cliquez sur « Créer le projet » dans la liste des devis.');
@@ -1024,8 +1068,18 @@ function editDevis(d, presetClient) {
     onOpen: form => {
       const E = form.elements; let manuel = !!(d && d.montantHT);
       E.montantHT.addEventListener('input', () => manuel = true);
-      const calc = () => { if (manuel || E.facturation.value === 'Forfait') return; const j = parseFloat(E.jours.value), t = parseFloat(E.tjm.value); if (j > 0 && t > 0) E.montantHT.value = Math.round(j * t * 100) / 100; };
-      E.jours.addEventListener('input', calc); E.tjm.addEventListener('input', calc);
+      const lab = (el, t) => el.closest('.fld').querySelector('label').textContent = t;
+      const majUnite = (init) => {
+        const demi = E.unite.value === 'Demi-journée';
+        const regie = E.facturation.value !== 'Forfait';
+        lab(E.quantite, (demi ? 'Nombre de demi-journées' : 'Nombre de jours') + (regie ? ' estimé (facultatif)' : ' prévu (facultatif)'));
+        lab(E.prixUnitaire, (demi ? 'Tarif demi-journée HT (€)' : 'Tarif jour HT (€)') + (regie ? ' *' : ''));
+        lab(E.montantHT, regie ? 'Montant estimé HT (€) (facultatif)' : 'Montant forfait HT (€) *');
+        if (!init) { const def = demi ? SETTINGS.tarifDemiDefaut : SETTINGS.tjmDefaut; if (def) E.prixUnitaire.value = def; calc(); }
+      };
+      const calc = () => { if (manuel || E.facturation.value === 'Forfait') return; const q = parseFloat(E.quantite.value), t = parseFloat(E.prixUnitaire.value); if (q > 0 && t > 0) E.montantHT.value = Math.round(q * t * 100) / 100; };
+      E.quantite.addEventListener('input', calc); E.prixUnitaire.addEventListener('input', calc);
+      E.unite.addEventListener('change', () => majUnite(false)); E.facturation.addEventListener('change', () => majUnite(true)); majUnite(true);
       if (!d) E.dateEmission.addEventListener('change', () => { E.numero.value = nextDevisNumero(E.dateEmission.value); });
       if (d) {
         const box = document.createElement('div'); box.className = 'full small muted';
@@ -1043,6 +1097,11 @@ function creerProjetDepuisDevis(d) {
     dateDebut: d.dateDecision || todayStr(), description: `Devis ${d.numero} accepté le ${fmtDate(d.dateDecision || todayStr())}`, devisId: d.id
   }, async pid => { await Store.save('devis', { ...d, statut: 'Accepté', projetId: pid, dateDecision: d.dateDecision || todayStr() }); });
 }
+function montantDevisHTML(d) {
+  if (d.facturation === 'Forfait') return eur(d.montantHT);
+  const tarif = d.prixUnitaire || d.tjm, u = d.unite === 'Demi-journée' ? '½ j' : 'j';
+  return `${d.montantHT ? eur(d.montantHT) + '<br>' : ''}<span class="small muted">Régie · ${tarif ? eur(tarif) + '/' + u : '?'}${d.montantHT ? ' (estimé)' : ''}</span>`;
+}
 function devisRows() {
   const q = DV.q.toLowerCase();
   return DB.devis.filter(d => (!DV.statut || (DV.statut === 'attente' ? d.statut === 'Envoyé' : d.statut === DV.statut)) && (!DV.client || d.clientId === DV.client) &&
@@ -1056,7 +1115,7 @@ function devisTableHTML() {
   return `<div class="table-wrap"><table class="lst"><thead><tr><th>N°</th><th>Date</th><th>Client</th><th>Objet</th><th class="num">Montant HT</th><th>Statut</th><th>Validité</th><th>Relance</th><th>Projet</th></tr></thead><tbody>
     ${rows.map(d => `<tr class="click" data-act="devis-edit" data-id="${d.id}">
       <td><b>${esc(d.numero)}</b></td><td>${fmtDate(d.dateEmission)}</td><td>${esc(clientNom(d.clientId))}</td><td class="wrap">${esc(d.objet)}</td>
-      <td class="num">${eur(d.montantHT)}</td><td>${badge(d.statut)}</td>
+      <td class="num">${montantDevisHTML(d)}</td><td>${badge(d.statut)}</td>
       <td class="${devisPerime(d) ? 'late' : ''}">${fmtDate(finValidite(d))}</td>
       <td class="${d.statut === 'Envoyé' && d.relance && !d.relanceFaite && d.relance < todayStr() ? 'late' : ''}">${d.statut === 'Envoyé' && d.relance ? fmtDate(d.relance) + (d.relanceFaite ? ' ✓' : '') : ''}</td>
       <td>${d.projetId ? `<a href="#" data-act="prj-open" data-id="${d.projetId}">${esc(byId('projets', d.projetId)?.code || '?')}</a>`
@@ -1086,7 +1145,7 @@ VIEWS.devis = () => {
       <div class="fld"><label>Année</label><select name="annee"><option value="">Toutes</option>${annees.map(a => `<option ${a === DV.annee ? 'selected' : ''}>${a}</option>`).join('')}</select></div>
     </div>
     <div id="dv-table">${devisTableHTML()}</div>
-    <p class="small muted" style="margin-top:8px">Taux de transformation = devis acceptés ÷ devis tranchés (acceptés, refusés, expirés) de l'année. Un devis envoyé dont la validité est dépassée apparaît en rouge : passez-le en « Expiré » ou relancez le client.</p>
+    <p class="small muted" style="margin-top:8px">Régie : le montant est une estimation facultative (jours estimés × tarif) ; les totaux n'incluent que les montants renseignés. Taux de transformation = devis acceptés ÷ devis tranchés (acceptés, refusés, expirés) de l'année. Un devis envoyé dont la validité est dépassée apparaît en rouge : passez-le en « Expiré » ou relancez le client.</p>
   </div>`;
 };
 VIEWS.devis_after = () => {
@@ -1207,7 +1266,7 @@ function ficheHTML() {
     const items = pts.filter(x => x.projetId === p.id), h = sum(items, x => x.heures);
     totH += h;
     rows += `<tr class="sub"><td colspan="${colspan + 2}">${esc(p.code)} — ${esc(p.nom)}${p.refClient ? ` <span style="font-weight:400">(réf. ${esc(p.refClient)})</span>` : ''}</td></tr>`;
-    if (FI.detail) rows += items.map(x => `<tr><td>${fmtDate(x.date)}</td><td>${esc(p.taches?.find(t => t.id === x.tacheId)?.nom || '')}</td><td>${esc(x.description || '')}</td><td>${esc(x.lieu || '')}</td><td class="num">${num(x.heures)}</td><td class="num">${num(jours(x.heures))}</td></tr>`).join('');
+    if (FI.detail) rows += items.map(x => `<tr><td>${fmtDate(x.date)}</td><td>${esc(tacheLabel(p, p.taches?.find(t => t.id === x.tacheId)))}</td><td>${esc(x.description || '')}</td><td>${esc(x.lieu || '')}</td><td class="num">${num(x.heures)}</td><td class="num">${num(jours(x.heures))}</td></tr>`).join('');
     rows += `<tr class="sub"><td colspan="${colspan}" style="text-align:right">Sous-total ${esc(p.code)}</td><td class="num">${num(h)}</td><td class="num">${num(jours(h))}</td></tr>`;
     if (FI.montant && p.facturation !== 'Forfait' && p.tjm) {
       hasM = true; const m = jours(h) * p.tjm; totM += m;
@@ -1286,9 +1345,16 @@ VIEWS.reglages = () => `
     <form id="set-form" class="grid-form">
       ${[{ k: 'nom', label: 'Nom commercial' }, { k: 'mention', label: 'Mention sous le logo' }, { k: 'slogan', label: 'Slogan (fiches)' }, { k: 'raisonSociale', label: 'Raison sociale' }, { k: 'siret', label: 'SIRET' },
          { k: 'adresse', label: 'Adresse', full: true }, { k: 'cp', label: 'Code postal' }, { k: 'ville', label: 'Ville' }, { k: 'email', label: 'E-mail' }, { k: 'tel', label: 'Téléphone' },
-         { k: 'heuresJour', label: 'Heures par jour (conversion h → j)', type: 'number', step: '0.25', min: 1 }, { k: 'tjmDefaut', label: 'TJM par défaut des devis (€ HT)', type: 'number', step: '1', min: 0 }].map(f => fieldHTML(f, withCpVille(SETTINGS)[f.k])).join('')}
+         { k: 'heuresJour', label: 'Heures par jour (conversion h → j)', type: 'number', step: '0.25', min: 1 }, { k: 'tjmDefaut', label: 'Tarif jour par défaut (€ HT)', type: 'number', step: '1', min: 0 }, { k: 'tarifDemiDefaut', label: 'Tarif demi-journée par défaut (€ HT)', type: 'number', step: '1', min: 0 }].map(f => fieldHTML(f, withCpVille(SETTINGS)[f.k])).join('')}
       <div class="full"><button class="btn primary" type="submit">Enregistrer</button></div>
     </form>
+  </div>
+  <div class="card"><h2>Référentiel WBS (N2)</h2>
+    <p class="small muted">Lots standard utilisés pour coder les tâches : <b>CODEPROJET-N2-N3</b> (ex. MJVA-01-7-1). Modifier un libellé ne change pas les codes existants.</p>
+    <div id="wbs-ed">${wbsList().map(w => `<div class="row wbs-row" style="margin-bottom:6px;flex-wrap:nowrap">
+      <input type="number" min="0" step="1" value="${w.n}" style="width:70px" data-k="n"><input value="${esc(w.lib)}" data-k="lib">
+      <button class="btn sm danger" type="button" data-wbs-del>✕</button></div>`).join('')}</div>
+    <div class="row" style="margin-top:8px"><button class="btn sm" type="button" id="wbs-add">+ Ajouter un lot</button><div class="spacer"></div><button class="btn primary sm" type="button" id="wbs-save">Enregistrer le référentiel</button></div>
   </div>
   <div class="card"><h2>Sauvegarde</h2>
     <p class="small">Exportez régulièrement vos données dans un fichier JSON et rangez-le dans votre dossier OneDrive.
@@ -1303,6 +1369,21 @@ VIEWS.reglages = () => `
     ${DEMO ? `<div style="margin-top:8px"><button class="btn sm danger" data-act="demo-reset">Effacer les données de démo</button></div>` : ''}
   </div>`;
 VIEWS.reglages_after = () => {
+  const ed = $('#wbs-ed');
+  if (ed) {
+    const rowHTML = n => `<div class="row wbs-row" style="margin-bottom:6px;flex-wrap:nowrap"><input type="number" min="0" step="1" value="${n}" style="width:70px" data-k="n"><input value="" data-k="lib" placeholder="Libellé"><button class="btn sm danger" type="button" data-wbs-del>✕</button></div>`;
+    $('#wbs-add').onclick = () => { const ns = [...ed.querySelectorAll('[data-k=n]')].map(i => +i.value); ed.insertAdjacentHTML('beforeend', rowHTML(ns.length ? Math.max(...ns) + 1 : 0)); ed.lastElementChild.querySelector('[data-k=lib]').focus(); };
+    ed.onclick = e => { if (e.target.closest('[data-wbs-del]')) e.target.closest('.wbs-row').remove(); };
+    $('#wbs-save').onclick = () => {
+      const list = [...ed.querySelectorAll('.wbs-row')].map(r => ({ n: parseInt(r.querySelector('[data-k=n]').value, 10), lib: r.querySelector('[data-k=lib]').value.trim().toUpperCase() })).filter(w => !isNaN(w.n) && w.lib);
+      const ns = list.map(w => w.n);
+      if (new Set(ns).size !== ns.length) return toast('Deux lots ont le même numéro', true);
+      const used = [...new Set(DB.projets.flatMap(p => (p.taches || []).map(t => t.n2)).filter(n => n != null && n !== ''))].map(Number);
+      const manquants = used.filter(n => !ns.includes(n));
+      if (manquants.length) return toast(`Lot(s) ${manquants.join(', ')} utilisé(s) par des tâches : suppression impossible`, true);
+      safe(() => Store.saveSettings({ wbsN2: list.sort((a, b) => a.n - b.n) }), 'Référentiel WBS enregistré');
+    };
+  }
   const f = $('#set-form');
   if (f) f.onsubmit = e => {
     e.preventDefault();
@@ -1310,6 +1391,7 @@ VIEWS.reglages_after = () => {
     v.cpVille = '';
     v.heuresJour = parseFloat(String(f.elements.heuresJour.value).replace(',', '.')) || 7;
     v.tjmDefaut = parseFloat(String(f.elements.tjmDefaut.value).replace(',', '.')) || null;
+    v.tarifDemiDefaut = parseFloat(String(f.elements.tarifDemiDefaut.value).replace(',', '.')) || null;
     safe(() => Store.saveSettings(v), 'Réglages enregistrés');
   };
   if (f) villeAuto(f);
