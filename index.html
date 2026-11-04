@@ -126,6 +126,7 @@ tr.click{cursor:pointer} tr.click:hover td{background:#F8F7F2}
 .wk-card{border-left:4px solid var(--vert);background:#F7F6F1;border-radius:6px;padding:6px 8px;margin-bottom:6px;cursor:pointer;font-size:.82rem}
 .wk-card:hover{background:#EFEDE5}
 .wk-h{font-weight:800;font-size:.78rem}
+.wk-maj{background:var(--cuivre);color:#fff;border-radius:4px;padding:0 5px;font-size:.66rem;letter-spacing:0;margin-left:3px}
 .wk-code{font-family:Consolas,'Courier New',monospace;font-size:.72rem;color:var(--muted)}
 .wk-sub{color:var(--ink);font-size:.78rem}
 .wk-desc{color:var(--muted);font-size:.76rem;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
@@ -175,6 +176,7 @@ tr.click{cursor:pointer} tr.click:hover td{background:#F8F7F2}
 .fiche .f-visa{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:20px;page-break-inside:avoid}
 .fiche .f-visa div{border:1px solid #D6D2C6;border-radius:6px;padding:8px 10px;min-height:34mm;font-size:8.8pt}
 .fiche .f-visa b{display:block;color:var(--basalte);margin-bottom:4px}
+.fiche .f-maj{color:var(--cuivre);font-size:7.5pt;font-weight:700}
 .fiche .f-sig{display:block;max-height:24mm;max-width:70mm;margin-top:4px}
 .fiche .f-foot{margin-top:14px;font-size:7.5pt;color:#777;text-align:center;border-top:1px solid #DDD;padding-top:6px}
 #print-area{display:none}
@@ -257,7 +259,7 @@ const COLS = ['clients', 'interactions', 'projets', 'pointages', 'partenaires', 
 const DEVIS_STATUTS = ['Brouillon', 'Envoyé', 'Accepté', 'Refusé', 'Expiré'];
 const DEFAULT_SETTINGS = {
   nom: 'DCPI', mention: 'Projets & Ingénierie', slogan: 'Vos projets, de l\'idée à la réalisation.', raisonSociale: '', adresse: '', cp: '', ville: '',
-  siret: '', email: '', tel: '', heuresJour: 7, lastBackup: '',
+  siret: '', email: '', tel: '', heuresJour: 7, lastBackup: '', majSamedi: 50, majDimanche: 100,
   // Référentiel WBS niveau 2 (standard MPE) — modifiable dans Réglages
   wbsN2: [
     { n: 0, lib: 'CHIFFRAGE' }, { n: 1, lib: 'PILOTAGE & GESTION DE PROJET' }, { n: 2, lib: 'ÉTUDES, CONCEPTION MÉCANIQUES' },
@@ -313,6 +315,30 @@ const wbsList = () => [...(SETTINGS.wbsN2 || [])].sort((a, b) => a.n - b.n);
 const wbsLib = n => wbsList().find(w => +w.n === +n)?.lib || '';
 const tacheCode = (p, t) => t ? (t.n2 != null && t.n2 !== '' ? `${p?.code || '?'}-${t.n2}-${t.n3}` : '') : '';
 const tacheLabel = (p, t) => t ? [tacheCode(p, t), t.nom].filter(Boolean).join(' · ') : '';
+// Jours fériés (France métropolitaine) et majorations week-end / férié
+const _feries = {};
+function feries(y) {
+  if (_feries[y]) return _feries[y];
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3),
+    h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451),
+    mois = Math.floor((h + l - 7 * m + 114) / 31), jour = ((h + l - 7 * m + 114) % 31) + 1;
+  const paques = toISO(new Date(y, mois - 1, jour));
+  return _feries[y] = { [`${y}-01-01`]: 'Jour de l\'an', [addDays(paques, 1)]: 'Lundi de Pâques', [`${y}-05-01`]: 'Fête du travail', [`${y}-05-08`]: 'Victoire 1945',
+    [addDays(paques, 39)]: 'Ascension', [addDays(paques, 50)]: 'Lundi de Pentecôte', [`${y}-07-14`]: 'Fête nationale', [`${y}-08-15`]: 'Assomption',
+    [`${y}-11-01`]: 'Toussaint', [`${y}-11-11`]: 'Armistice', [`${y}-12-25`]: 'Noël' };
+}
+const ferie = d => feries(+String(d).slice(0, 4))[d] || '';
+function majAuto(d) {
+  if (!d) return { pct: 0, lib: '' };
+  const f = ferie(d), wd = parseISO(d).getDay();
+  if (f) return { pct: +SETTINGS.majDimanche || 0, lib: f };
+  if (wd === 0) return { pct: +SETTINGS.majDimanche || 0, lib: 'Dimanche' };
+  if (wd === 6) return { pct: +SETTINGS.majSamedi || 0, lib: 'Samedi' };
+  return { pct: 0, lib: '' };
+}
+const majPt = x => x.majPct != null && x.majPct !== '' ? +x.majPct : majAuto(x.date).pct;
+// Valeur HT d'un pointage au TJM du projet, majoration comprise
+const valeurPt = (x, p) => jours(x.heures) * (+p?.tjm || 0) * (1 + majPt(x) / 100);
 const nomContact = x => [x?.prenom, x?.nom].filter(Boolean).join(' ');
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const sum = (arr, f) => arr.reduce((a, x) => a + (+f(x) || 0), 0);
@@ -539,9 +565,11 @@ function editPointage(x, date) {
     { k: 'tacheId', label: 'Tâche (WBS N3)', type: 'select', options: tOpts(v0.projetId) },
     { k: 'lieu', label: 'Lieu', type: 'select', options: LIEUX },
     { k: 'facturable', label: 'Facturable', type: 'checkbox' },
+    { k: 'majPct', label: 'Majoration (%)', type: 'number', step: '1', min: 0 },
     { k: 'description', label: 'Description du travail', full: true, placeholder: 'ex. Réunion de lancement, revue du cahier des charges…' }
-  ], v0, async v => {
+  ], { ...v0, majPct: x ? majPt(x) : majAuto(v0.date).pct }, async v => {
     if (!(v.heures > 0) || v.heures > 24) { toast('Nombre d\'heures invalide', true); return false; }
+    if (v.majPct == null) v.majPct = 0;
     await Store.save('pointages', { ...(x || {}), ...v });
     PT.last = { projetId: v.projetId, lieu: v.lieu };
     toast(x ? 'Pointage modifié' : 'Pointage ajouté');
@@ -556,13 +584,19 @@ function editPointage(x, date) {
       box.innerHTML = [1, 2, 3.5, 4, hJ()].map(n => `<button type="button" class="btn sm" data-h="${n}">${num(n)} h</button>`).join('');
       box.onclick = e => { const b = e.target.closest('[data-h]'); if (b) h.value = b.dataset.h; };
       h.parentElement.appendChild(box);
+      // majoration : suit la date (samedi, dimanche, férié) tant qu'elle n'est pas modifiée à la main
+      const E = form.elements, info = document.createElement('div'); info.className = 'small muted'; info.style.marginTop = '4px';
+      E.majPct.parentElement.appendChild(info);
+      let manuel = !!x && majPt(x) !== majAuto(x.date).pct;
+      const maj = () => { const a = majAuto(E.date.value); if (!manuel) E.majPct.value = a.pct; info.textContent = a.lib ? `${a.lib} : +${a.pct} % (Réglages)` : 'Jour ouvré : pas de majoration'; };
+      E.majPct.addEventListener('input', () => manuel = true); E.date.addEventListener('change', maj); maj();
     }
   });
 }
 function cardPt(x) {
   const pj = byId('projets', x.projetId), tk = pj?.taches?.find(t => t.id === x.tacheId);
   return `<div class="wk-card" style="border-left-color:${prjColor(x.projetId)}" data-act="pt-edit" data-id="${x.id}" title="${esc(clientNom(pj?.clientId))}">
-    <div><b style="color:${prjColor(x.projetId)}">${esc(pj?.code || '?')}</b> <span class="wk-h">${num(x.heures)} h</span>${x.facturable ? '' : ' <span class="small muted">NF</span>'}</div>
+    <div><b style="color:${prjColor(x.projetId)}">${esc(pj?.code || '?')}</b> <span class="wk-h">${num(x.heures)} h</span>${majPt(x) ? ` <span class="wk-maj">+${majPt(x)} %</span>` : ''}${x.facturable ? '' : ' <span class="small muted">NF</span>'}</div>
     ${tk && tacheCode(pj, tk) ? `<div class="wk-code">${esc(tacheCode(pj, tk))}</div>` : ''}
     <div class="wk-sub">${esc(tk?.nom || pj?.nom || 'Projet supprimé')}</div>
     ${x.description ? `<div class="wk-desc">${esc(x.description)}</div>` : ''}</div>`;
@@ -592,7 +626,7 @@ function ptSemaine() {
         const h = sum(items, x => x.heures), pct = Math.min(h / hJ() * 100, 100);
         const lab = parseISO(d).toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '').toUpperCase() + ' ' + parseISO(d).getDate();
         return `<div class="wk-day ${d === t ? 'today' : ''}">
-          <div class="wk-dh"><div><div class="wk-lab">${lab}</div><div class="wk-tot">${num(h)} h</div></div><button class="wk-plus" data-act="pt-add" data-id="${d}" title="Ajouter">+</button></div>
+          <div class="wk-dh"><div><div class="wk-lab">${lab}${majAuto(d).pct ? ` <span class="wk-maj" title="${esc(majAuto(d).lib)}">${ferie(d) ? 'FÉRIÉ ' : ''}+${majAuto(d).pct} %</span>` : ''}</div><div class="wk-tot">${num(h)} h</div></div><button class="wk-plus" data-act="pt-add" data-id="${d}" title="Ajouter">+</button></div>
           <div class="bar ${h > hJ() ? 'over' : ''}" style="margin:6px 0 8px"><i style="width:${pct}%;background:var(--vert)"></i></div>
           ${items.map(cardPt).join('')}
           <button class="wk-add" data-act="pt-add" data-id="${d}">+ Ajouter</button>
@@ -717,7 +751,7 @@ function projetDetail(p) {
       <div class="kpi"><b>${num(j)} j</b><span>Pointés (${num(h)} h)${p.budgetJours ? ` sur ${num(p.budgetJours)} j budgétés` : ''}</span>
         ${p.budgetJours ? `<div class="bar ${pct > 100 ? 'over' : ''}" style="margin-top:6px"><i style="width:${Math.min(pct, 100)}%"></i></div>` : ''}</div>
       <div class="kpi"><b>${num(jf)} j</b><span>Facturables</span></div>
-      ${regie && p.tjm ? `<div class="kpi"><b>${eur(jf * p.tjm)}</b><span>Valeur HT au TJM</span></div>` : ''}
+      ${regie && p.tjm ? `<div class="kpi"><b>${eur(sum(pts.filter(x => x.facturable), x => valeurPt(x, p)))}</b><span>Valeur HT au TJM (majorations incluses)</span></div>` : ''}
       ${!regie && p.montantForfait && j ? `<div class="kpi"><b>${eur(p.montantForfait / j)}</b><span>TJM réel obtenu</span></div>` : ''}
       ${p.budgetJours ? `<div class="kpi"><b class="${p.budgetJours - j < 0 ? 'late' : ''}">${num(p.budgetJours - j)} j</b><span>Reste au budget</span></div>` : ''}
     </div>
@@ -793,7 +827,7 @@ function projetRow(p) {
     prevu: regie ? (+p.budgetJours || 0) * (+p.tjm || 0) : (+p.montantForfait || 0),
     budget: +p.budgetJours || 0, pointe: jours(h),
     pct: p.budgetJours ? jours(h) / p.budgetJours * 100 : null,
-    realise: regie ? jours(hf) * (+p.tjm || 0) : (+p.montantForfait || 0) * (p.budgetJours ? Math.min(jours(h) / p.budgetJours, 1) : 0),
+    realise: regie ? sum(DB.pointages.filter(x => x.projetId === p.id && x.facturable), x => valeurPt(x, p)) : (+p.montantForfait || 0) * (p.budgetJours ? Math.min(jours(h) / p.budgetJours, 1) : 0),
     debut: p.dateDebut || '', fin: p.dateFin || '', dernier: pts[pts.length - 1] || ''
   };
 }
@@ -1267,11 +1301,17 @@ function ficheHTML() {
     const items = pts.filter(x => x.projetId === p.id), h = sum(items, x => x.heures);
     totH += h;
     rows += `<tr class="sub"><td colspan="${colspan + 2}">${esc(p.code)} — ${esc(p.nom)}${p.refClient ? ` <span style="font-weight:400">(réf. ${esc(p.refClient)})</span>` : ''}</td></tr>`;
-    if (FI.detail) rows += items.map(x => `<tr><td>${fmtDate(x.date)}</td><td>${esc(tacheLabel(p, p.taches?.find(t => t.id === x.tacheId)))}</td><td>${esc(x.description || '')}</td><td>${esc(x.lieu || '')}</td><td class="num">${num(x.heures)}</td><td class="num">${num(jours(x.heures))}</td></tr>`).join('');
+    if (FI.detail) rows += items.map(x => `<tr><td>${fmtDate(x.date)}${majPt(x) ? `<br><span class="f-maj">${esc(majAuto(x.date).lib || 'Majoré')} +${majPt(x)} %</span>` : ''}</td><td>${esc(tacheLabel(p, p.taches?.find(t => t.id === x.tacheId)))}</td><td>${esc(x.description || '')}</td><td>${esc(x.lieu || '')}</td><td class="num">${num(x.heures)}</td><td class="num">${num(jours(x.heures))}</td></tr>`).join('');
+    const hMaj = sum(items.filter(x => majPt(x)), x => x.heures);
     rows += `<tr class="sub"><td colspan="${colspan}" style="text-align:right">Sous-total ${esc(p.code)}</td><td class="num">${num(h)}</td><td class="num">${num(jours(h))}</td></tr>`;
+    if (hMaj) rows += `<tr><td colspan="${colspan}" style="text-align:right" class="f-maj">dont heures majorées (week-end / férié)</td><td class="num f-maj">${num(hMaj)}</td><td class="num f-maj">${num(jours(hMaj))}</td></tr>`;
     if (FI.montant && p.facturation !== 'Forfait' && p.tjm) {
-      hasM = true; const m = jours(h) * p.tjm; totM += m;
-      rows += `<tr class="mt"><td colspan="${colspan}" style="text-align:right">Montant HT (${num(jours(h))} j × ${eur(p.tjm)})</td><td colspan="2" class="num">${eur(m)}</td></tr>`;
+      hasM = true; const base = jours(h) * p.tjm, m = sum(items, x => valeurPt(x, p)); totM += m;
+      rows += `<tr class="mt"><td colspan="${colspan}" style="text-align:right">Montant HT (${num(jours(h))} j × ${eur(p.tjm)})</td><td colspan="2" class="num">${eur(base)}</td></tr>`;
+      if (m - base > 0.005) {
+        const det = [...new Set(items.filter(x => majPt(x)).map(majPt))].map(pc => { const hh = sum(items.filter(x => majPt(x) === pc), x => x.heures); return `${num(jours(hh))} j × ${eur(p.tjm)} × ${pc} %`; }).join(' + ');
+        rows += `<tr class="mt"><td colspan="${colspan}" style="text-align:right">Majorations (${det})</td><td colspan="2" class="num">${eur(m - base)}</td></tr>`;
+      }
     }
   }
   rows += `<tr class="tot"><td colspan="${colspan}" style="text-align:right">TOTAL PÉRIODE</td><td class="num">${num(totH)} h</td><td class="num">${num(jours(totH))} j</td></tr>`;
@@ -1348,7 +1388,7 @@ VIEWS.reglages = () => `
     <form id="set-form" class="grid-form">
       ${[{ k: 'nom', label: 'Nom commercial' }, { k: 'mention', label: 'Mention sous le logo' }, { k: 'slogan', label: 'Slogan (fiches)' }, { k: 'raisonSociale', label: 'Raison sociale' }, { k: 'siret', label: 'SIRET' },
          { k: 'adresse', label: 'Adresse', full: true }, { k: 'cp', label: 'Code postal' }, { k: 'ville', label: 'Ville' }, { k: 'email', label: 'E-mail' }, { k: 'tel', label: 'Téléphone' },
-         { k: 'heuresJour', label: 'Heures par jour (conversion h → j)', type: 'number', step: '0.25', min: 1 }, { k: 'tjmDefaut', label: 'Tarif jour par défaut (€ HT)', type: 'number', step: '1', min: 0 }, { k: 'tarifDemiDefaut', label: 'Tarif demi-journée par défaut (€ HT)', type: 'number', step: '1', min: 0 }].map(f => fieldHTML(f, withCpVille(SETTINGS)[f.k])).join('')}
+         { k: 'heuresJour', label: 'Heures par jour (conversion h → j)', type: 'number', step: '0.25', min: 1 }, { k: 'tjmDefaut', label: 'Tarif jour par défaut (€ HT)', type: 'number', step: '1', min: 0 }, { k: 'tarifDemiDefaut', label: 'Tarif demi-journée par défaut (€ HT)', type: 'number', step: '1', min: 0 }, { k: 'majSamedi', label: 'Majoration samedi (%)', type: 'number', step: '1', min: 0 }, { k: 'majDimanche', label: 'Majoration dimanche & jours fériés (%)', type: 'number', step: '1', min: 0 }].map(f => fieldHTML(f, withCpVille(SETTINGS)[f.k])).join('')}
       <div class="full"><button class="btn primary" type="submit">Enregistrer</button></div>
     </form>
   </div>
@@ -1428,6 +1468,8 @@ VIEWS.reglages_after = () => {
     v.heuresJour = parseFloat(String(f.elements.heuresJour.value).replace(',', '.')) || 7;
     v.tjmDefaut = parseFloat(String(f.elements.tjmDefaut.value).replace(',', '.')) || null;
     v.tarifDemiDefaut = parseFloat(String(f.elements.tarifDemiDefaut.value).replace(',', '.')) || null;
+    v.majSamedi = parseFloat(String(f.elements.majSamedi.value).replace(',', '.')) || 0;
+    v.majDimanche = parseFloat(String(f.elements.majDimanche.value).replace(',', '.')) || 0;
     safe(() => Store.saveSettings(v), 'Réglages enregistrés');
   };
   if (f) villeAuto(f);
