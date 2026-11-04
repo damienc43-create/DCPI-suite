@@ -164,6 +164,10 @@ tr.click{cursor:pointer} tr.click:hover td{background:#F8F7F2}
 .fiche .f-title{text-align:right}
 .fiche .f-title h1{font-size:15pt;color:var(--basalte);letter-spacing:.04em;margin:0}
 .fiche .f-title div{font-size:9pt;color:#444}
+.fiche .f-info{margin:14px 0 0;font-size:9.5pt;border:1.5px solid var(--basalte)}
+.fiche .f-info th{background:#F1EFE8;color:var(--basalte);text-align:right;width:38%;font-size:8.5pt;text-transform:none;letter-spacing:0;padding:5px 10px;border-bottom:1px solid #D6D2C6;border-right:1.5px solid var(--basalte)}
+.fiche .f-info td{text-align:center;font-weight:700;padding:5px 10px;border-bottom:1px solid #D6D2C6}
+.fiche .f-sub{font-weight:400;font-size:8pt;color:#666}
 .fiche .f-blocks{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
 .fiche .f-block{border:1px solid #D6D2C6;border-radius:6px;padding:8px 10px;font-size:9pt}
 .fiche .f-block b.h{display:block;font-size:7.5pt;text-transform:uppercase;letter-spacing:.06em;color:var(--cuivre);margin-bottom:3px}
@@ -252,7 +256,7 @@ const FIREBASE_CONFIG = {
 const ALLOWED_EMAIL = "damienc43@gmail.com";
 
 /* ===================================================================== */
-const APP_VERSION = '1.8';
+const APP_VERSION = '1.10';
 const DEMO = FIREBASE_CONFIG.apiKey === 'A_REMPLIR';
 const SDK_KO = !DEMO && typeof firebase === 'undefined';  // config présente mais Firebase non chargé
 const COLS = ['clients', 'interactions', 'projets', 'pointages', 'partenaires', 'devis'];
@@ -339,6 +343,7 @@ function majAuto(d) {
 const majPt = x => x.majPct != null && x.majPct !== '' ? +x.majPct : majAuto(x.date).pct;
 // Valeur HT d'un pointage au TJM du projet, majoration comprise
 const valeurPt = (x, p) => jours(x.heures) * (+p?.tjm || 0) * (1 + majPt(x) / 100);
+const lieuTexte = (l, c) => l === 'Sur site client' ? [c?.nom, c?.ville].filter(Boolean).join(' — ') : l === 'Bureau' ? `Bureau ${SETTINGS.nom || 'DCPI'}` : (l || '');
 const nomContact = x => [x?.prenom, x?.nom].filter(Boolean).join(' ');
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const sum = (arr, f) => arr.reduce((a, x) => a + (+f(x) || 0), 0);
@@ -1305,7 +1310,7 @@ function ficheHTML() {
     const items = pts.filter(x => x.projetId === p.id), h = sum(items, x => x.heures), hq = sum(items, heq);
     totH += h; totHq += hq;
     rows += `<tr class="sub"><td colspan="${colspan + nc}">${esc(p.code)} — ${esc(p.nom)}${p.refClient ? ` <span style="font-weight:400">(réf. ${esc(p.refClient)})</span>` : ''}</td></tr>`;
-    if (FI.detail) rows += items.map(x => `<tr><td>${fmtDate(x.date)}${majPt(x) ? `<br><span class="f-maj">${esc(majAuto(x.date).lib || 'Majoré')} +${majPt(x)} %</span>` : ''}</td><td>${esc(tacheLabel(p, p.taches?.find(t => t.id === x.tacheId)))}</td><td>${esc(x.description || '')}</td><td>${esc(x.lieu || '')}</td>${cells(x.heures, heq(x))}</tr>`).join('');
+    if (FI.detail) rows += items.map(x => `<tr><td>${fmtDate(x.date)}${majPt(x) ? `<br><span class="f-maj">${esc(majAuto(x.date).lib || 'Majoré')} +${majPt(x)} %</span>` : ''}</td><td>${esc(p.taches?.find(t => t.id === x.tacheId)?.nom || '')}</td><td>${esc(x.description || '')}</td><td>${esc(x.lieu || '')}</td>${cells(x.heures, heq(x))}</tr>`).join('');
     rows += `<tr class="sub"><td colspan="${colspan}" style="text-align:right">Sous-total ${esc(p.code)}</td>${cells(h, hq)}</tr>`;
     if (FI.montant && p.facturation !== 'Forfait' && p.tjm) {
       hasM = true; const base = jours(h) * p.tjm, m = sum(items, x => valeurPt(x, p)); totM += m;
@@ -1324,13 +1329,17 @@ function ficheHTML() {
         <div class="f-ident">${esc(S.raisonSociale || S.nom)}<br>${esc(S.adresse)}${S.adresse ? '<br>' : ''}${esc(cpv(S))}<br>${esc([S.email, S.tel].filter(Boolean).join(' · '))}</div></div>
       <div class="f-title"><h1>FICHE DE POINTAGE</h1><div>Réf. ${esc(ref)}</div><div>Période : <b>${esc(per.label)}</b></div><div>Éditée le ${fmtDate(todayStr())}</div></div>
     </div>
-    <div class="f-blocks">
-      <div class="f-block"><b class="h">Client</b><b>${esc(c.nom)}</b><br>${esc(c.adresse || '')}${c.adresse ? '<br>' : ''}${esc(cpv(c))}
-        ${contact ? `<br>À l'attention de : ${esc(nomContact(contact))}${contact.fonction ? ', ' + esc(contact.fonction) : ''}` : ''}</div>
-      <div class="f-block"><b class="h">Intervenant</b>${esc(S.signataire || USER?.displayName || S.raisonSociale || S.nom)}<br>
-        Base de calcul : 1 jour = ${num(hJ())} h<br>${FI.factOnly ? 'Temps facturable uniquement' : 'Tous les temps pointés'}</div>
-    </div>
-    <table><thead><tr>${FI.detail ? '<th>Date</th><th>Tâche</th><th>Travaux réalisés</th><th>Lieu</th>' : '<th>Projet</th>'}${MAJ ? '<th class="num">Heures réelles</th><th class="num">Heures facturées</th><th class="num">Jours facturés</th>' : '<th class="num">Heures</th><th class="num">Jours</th>'}</tr></thead>
+    <table class="f-info"><tbody>
+      <tr><th>Nom prénom intervenant</th><td>${esc(S.signataire || USER?.displayName || S.raisonSociale || S.nom)}</td></tr>
+      <tr><th>Client</th><td>${esc(c.nom)}${cpv(c) || c.adresse ? `<span class="f-sub"> — ${esc([c.adresse, cpv(c)].filter(Boolean).join(', '))}</span>` : ''}${contact ? `<span class="f-sub"><br>À l'attention de ${esc(nomContact(contact))}${contact.fonction ? ', ' + esc(contact.fonction) : ''}</span>` : ''}</td></tr>
+      <tr><th>Code projet</th><td>${esc(groups.map(p => p.code).join(' / '))}</td></tr>
+      <tr><th>Lieu(x) d'intervention</th><td>${esc([...new Set(pts.map(x => lieuTexte(x.lieu, c)))].filter(Boolean).join(' / '))}</td></tr>
+      <tr><th>Affaire</th><td>${esc(groups.map(p => p.nom).join(' / '))}</td></tr>
+      <tr><th>Devis</th><td>${esc(groups.map(p => (byId('devis', p.devisId) || DB.devis.find(d => d.projetId === p.id))?.numero).filter(Boolean).join(' / ')) || '—'}</td></tr>
+      <tr><th>Commande</th><td>${esc(groups.map(p => p.refClient).filter(Boolean).join(' / ')) || '—'}</td></tr>
+    </tbody></table>
+    <p class="f-sub" style="margin:4px 0 12px">Base de calcul : 1 jour = ${num(hJ())} h · ${FI.factOnly ? 'temps facturable uniquement' : 'tous les temps pointés'}</p>
+    <table><thead><tr>${FI.detail ? '<th>Date</th><th>Tâche</th><th>Travaux réalisés</th><th>Lieu</th>' : '<th>Projet</th>'}${MAJ ? '<th class="num">H. réelles</th><th class="num">H. facturées</th><th class="num">J. facturés</th>' : '<th class="num">Heures</th><th class="num">Jours</th>'}</tr></thead>
       <tbody>${rows}</tbody></table>
     ${MAJ ? `<p class="f-maj" style="margin:6px 0 0">Heures facturées = heures réelles × (1 + majoration). Samedi +${num(SETTINGS.majSamedi || 0, 0)} % · dimanche et jours fériés +${num(SETTINGS.majDimanche || 0, 0)} %.</p>` : ''}
     <div class="f-visa">
