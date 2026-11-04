@@ -75,6 +75,10 @@ textarea{min-height:70px;resize:vertical}
 .b-Proposition{background:#FFF1DC;color:#8A5300}
 .b-En-cours{background:#DCEBFA;color:#1D4F8C}
 .b-En-pause{background:#F3E8FA;color:#6B3A8A}
+.b-Envoye{background:#DCEBFA;color:#1D4F8C}
+.b-Accepte{background:#DFF3E7;color:#1F6B42}
+.b-Refuse,.b-Expire{background:#F8E1DE;color:#9B2C20}
+.b-Brouillon{background:#EEE;color:#555}
 .b-Termine,.b-Fait{background:#DFF3E7;color:#1F6B42}
 .b-A-faire{background:#EEE;color:#555}
 table{width:100%;border-collapse:collapse}
@@ -205,6 +209,7 @@ tr.click{cursor:pointer} tr.click:hover td{background:#F8F7F2}
     <nav class="tabs" id="tabs">
       <button data-view="accueil">Accueil</button>
       <button data-view="pointages">Pointages</button>
+      <button data-view="devis">Devis</button>
       <button data-view="liste">Liste des projets</button>
       <button data-view="projets">Suivi projet</button>
       <button data-view="crm">CRM</button>
@@ -246,7 +251,8 @@ const ALLOWED_EMAIL = "damienc43@gmail.com";
 const APP_VERSION = '1.0';
 const DEMO = FIREBASE_CONFIG.apiKey === 'A_REMPLIR';
 const SDK_KO = !DEMO && typeof firebase === 'undefined';  // config présente mais Firebase non chargé
-const COLS = ['clients', 'interactions', 'projets', 'pointages', 'partenaires'];
+const COLS = ['clients', 'interactions', 'projets', 'pointages', 'partenaires', 'devis'];
+const DEVIS_STATUTS = ['Brouillon', 'Envoyé', 'Accepté', 'Refusé', 'Expiré'];
 const DEFAULT_SETTINGS = {
   nom: 'DCPI', mention: 'Projets & Ingénierie', slogan: 'Vos projets, de l\'idée à la réalisation.', raisonSociale: '', adresse: '', cp: '', ville: '',
   siret: '', email: '', tel: '', heuresJour: 7, lastBackup: ''
@@ -261,7 +267,7 @@ const INTER_TYPES = ['Appel', 'Rendez-vous', 'E-mail', 'Visite', 'Proposition en
 const PART_TYPES = ['Fournisseur', 'Sous-traitant', 'Bureau d\'études', 'Constructeur / intégrateur', 'Partenaire', 'Prestataire de services', 'Autre'];
 const PART_STATUTS = ['Actif', 'À qualifier', 'Inactif'];
 
-let DB = { clients: [], interactions: [], projets: [], pointages: [], partenaires: [] };
+let DB = { clients: [], interactions: [], projets: [], pointages: [], partenaires: [], devis: [] };
 let SETTINGS = { ...DEFAULT_SETTINGS };
 let VIEW = 'accueil';
 let USER = null;
@@ -351,7 +357,7 @@ const Store = {
       d => { SETTINGS = { ...DEFAULT_SETTINGS, ...(d.exists ? d.data() : {}) }; render(); markLoaded('settings'); },
       err => toast('Lecture des réglages impossible : ' + err.message, true)));
   },
-  stop() { this.unsubs.forEach(u => u()); this.unsubs = []; DB = { clients: [], interactions: [], projets: [], pointages: [], partenaires: [] }; },
+  stop() { this.unsubs.forEach(u => u()); this.unsubs = []; DB = { clients: [], interactions: [], projets: [], pointages: [], partenaires: [], devis: [] }; },
   persistDemo() {
     try { localStorage.setItem(DEMO_KEY, JSON.stringify({ db: DB, settings: SETTINGS })); }
     catch (e) { toast('Stockage local impossible : ' + e.message, true); }
@@ -460,8 +466,10 @@ VIEWS.accueil = () => {
   const ptM = DB.pointages.filter(p => (p.date || '').startsWith(ym));
   const hFactM = sum(ptM.filter(p => p.facturable), p => p.heures);
   const enCours = DB.projets.filter(p => p.statut === 'En cours');
-  const props = DB.projets.filter(p => p.statut === 'Proposition');
-  const relances = DB.interactions.filter(i => i.relance && !i.relanceFaite).sort((a, b) => a.relance.localeCompare(b.relance));
+  const props = DB.devis.filter(d => d.statut === 'Envoyé');
+  const relances = [...DB.interactions.filter(i => i.relance && !i.relanceFaite),
+    ...DB.devis.filter(d => d.statut === 'Envoyé' && d.relance && !d.relanceFaite).map(d => ({ ...d, _devis: true }))]
+    .sort((a, b) => a.relance.localeCompare(b.relance));
   let backupMsg = '';
   const lb = SETTINGS.lastBackup ? (Date.now() - new Date(SETTINGS.lastBackup)) / 864e5 : Infinity;
   if (DB.pointages.length + DB.clients.length > 0 && lb > 7)
@@ -474,11 +482,14 @@ VIEWS.accueil = () => {
     <div class="kpi"><b>${num(sum(ptW, p => p.heures), 2)} h</b><span>Semaine ${isoWeek(t)} (${num(jours(sum(ptW, p => p.heures)))} j)</span></div>
     <div class="kpi"><b>${num(jours(hFactM))} j</b><span>Facturables en ${fmtMonth(ym)}</span></div>
     <div class="kpi"><b>${enCours.length}</b><span>Projets en cours</span></div>
-    <div class="kpi"><b>${props.length}</b><span>Propositions en attente</span></div>
+    <div class="kpi" data-act="goto" data-id="devis" style="cursor:pointer"><b>${props.length}</b><span>Devis en attente${props.length ? ' · ' + eur(sum(props, d => d.montantHT)) : ''}</span></div>
   </div>
   <div class="two-eq">
     <div class="card"><h3>Relances à faire</h3>
-      ${relances.length ? relances.map(i => `<div class="journal-item row">
+      ${relances.length ? relances.map(i => i._devis ? `<div class="journal-item row">
+          <div><span class="${i.relance < t ? 'late' : ''}">${fmtDate(i.relance)}</span> · <a href="#" data-act="devis-edit" data-id="${i.id}">Devis ${esc(i.numero)}</a> — ${esc(clientNom(i.clientId))}<br>
+          <span class="small muted">${esc(i.objet)} · ${eur(i.montantHT)}</span></div>
+          <div class="spacer"></div><button class="btn sm" data-act="devis-relance-ok" data-id="${i.id}">Fait</button></div>` : `<div class="journal-item row">
           <div><span class="${i.relance < t ? 'late' : ''}">${fmtDate(i.relance)}</span> · ${i.partenaireId ? `<a href="#" data-act="part-open" data-id="${i.partenaireId}">${esc(byId('partenaires', i.partenaireId)?.nom || '—')}</a>` : `<a href="#" data-act="crm-open" data-id="${i.clientId}">${esc(clientNom(i.clientId))}</a>`}<br>
           <span class="small muted">${esc(i.type)} du ${fmtDate(i.date)} — ${esc(i.resume)}</span></div>
           <div class="spacer"></div><button class="btn sm" data-act="relance-ok" data-id="${i.id}">Fait</button></div>`).join('')
@@ -627,14 +638,15 @@ const PROJET_FIELDS = () => [
   { k: 'refClient', label: 'Réf. commande client' },
   { k: 'description', label: 'Description / périmètre', type: 'textarea', full: true }
 ];
-function editProjet(p, presetClient) {
-  formModal(p ? 'Modifier le projet' : 'Nouveau projet', PROJET_FIELDS(), p || { code: nextProjetCode(presetClient), clientId: presetClient || '' }, async v => {
+function editProjet(p, presetClient, preset = {}, afterCreate = null) {
+  formModal(p ? 'Modifier le projet' : 'Nouveau projet', PROJET_FIELDS(), p || { code: nextProjetCode(presetClient), clientId: presetClient || '', ...preset }, async v => {
     if (!DB.clients.length) { toast('Créez d\'abord un client dans le CRM', true); return false; }
     v.code = v.code.toUpperCase();
     if (DB.projets.some(x => x.code === v.code && x.id !== p?.id)) { toast('Ce code projet existe déjà', true); return false; }
     const cl = byId('clients', v.clientId);
     if (cl && !cl.code) await Store.save('clients', { ...cl, code: clientCode(cl) });   // fige le code client au 1er projet
-    const id = await Store.save('projets', { ...(p || { taches: [] }), ...v });
+    const id = await Store.save('projets', { ...(p || { taches: [], ...(preset.devisId ? { devisId: preset.devisId } : {}) }), ...v });
+    if (!p && afterCreate) await afterCreate(id);
     toast(p ? 'Projet modifié' : 'Projet créé');
     if (!p) { PRJ.sel = id; VIEW = 'projets'; render(); }
   }, {
@@ -681,6 +693,7 @@ function projetDetail(p) {
     <h2 style="margin-top:12px">${esc(p.code)} — ${esc(p.nom)} ${badge(p.statut)}</h2>
     <div class="info">
       <div><small>Client</small><a href="#" data-act="crm-open" data-id="${p.clientId}">${esc(clientNom(p.clientId))}</a></div>
+      ${DB.devis.filter(d => d.projetId === p.id).map(d => `<div><small>Devis</small><a href="#" data-act="devis-edit" data-id="${d.id}">${esc(d.numero)}</a> · ${eur(d.montantHT)}</div>`).join('')}
       <div><small>Facturation</small>${esc(p.facturation)}${regie && p.tjm ? ' · ' + eur(p.tjm) + '/j' : ''}${!regie && p.montantForfait ? ' · ' + eur(p.montantForfait) : ''}</div>
       <div><small>Période</small>${fmtDate(p.dateDebut) || '?'} → ${fmtDate(p.dateFin) || '?'}</div>
       ${p.refClient ? `<div><small>Réf. client</small>${esc(p.refClient)}</div>` : ''}
@@ -962,9 +975,124 @@ function clientDetail(c) {
     <div class="sec"><div class="row"><h3 style="margin:0">Projets</h3><div class="spacer"></div><button class="btn sm" data-act="prj-new-for" data-id="${c.id}">+ Projet</button></div>
       ${prj.length ? `<table><tbody>${prj.map(p => `<tr class="click" data-act="prj-open" data-id="${p.id}"><td><b>${esc(p.code)}</b> ${esc(p.nom)}</td><td>${badge(p.statut)}</td><td class="num">${num(jours(heuresProjet(p.id)))} j</td></tr>`).join('')}</tbody></table>` : '<div class="empty">Aucun projet.</div>'}
     </div>
+    <div class="sec"><div class="row"><h3 style="margin:0">Devis</h3><div class="spacer"></div><button class="btn sm" data-act="devis-new-for" data-id="${c.id}">+ Devis</button></div>
+      ${(() => { const dv = DB.devis.filter(d => d.clientId === c.id).sort((a, b) => (b.numero || '').localeCompare(a.numero || ''));
+        return dv.length ? `<table><tbody>${dv.map(d => `<tr class="click" data-act="devis-edit" data-id="${d.id}"><td><b>${esc(d.numero)}</b> ${esc(d.objet)}</td><td>${badge(d.statut)}</td><td class="num">${eur(d.montantHT)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">Aucun devis.</div>'; })()}
+    </div>
     ${journalBlock('clients', c)}
   </div>`;
 }
+
+/* ---------- DEVIS ---------- */
+const DV = { q: '', statut: '', client: '', annee: String(new Date().getFullYear()) };
+function nextDevisNumero(dateStr) {
+  const yy = String(dateStr || todayStr()).slice(2, 4), pre = `DCPI-${yy}-`;
+  const max = DB.devis.map(d => d.numero || '').filter(n => n.startsWith(pre)).map(n => parseInt(n.slice(pre.length), 10) || 0).reduce((a, b) => Math.max(a, b), 0);
+  return pre + String(max + 1).padStart(3, '0');
+}
+const finValidite = d => d.dateEmission && d.validiteJours ? addDays(d.dateEmission, +d.validiteJours) : '';
+const devisPerime = d => d.statut === 'Envoyé' && finValidite(d) && finValidite(d) < todayStr();
+const DEVIS_FIELDS = () => [
+  { k: 'numero', label: 'N° de devis', required: true },
+  { k: 'dateEmission', label: 'Date d\'émission', type: 'date', required: true },
+  { k: 'clientId', label: 'Client', type: 'select', required: true, options: [{ v: '', l: '— Choisir —' }, ...[...DB.clients].sort((a, b) => a.nom.localeCompare(b.nom)).map(c => ({ v: c.id, l: c.nom }))] },
+  { k: 'objet', label: 'Objet', required: true, full: true, placeholder: 'ex. Mission AMO — extension atelier de production' },
+  { k: 'statut', label: 'Statut', type: 'select', options: DEVIS_STATUTS, def: 'Brouillon' },
+  { k: 'facturation', label: 'Type', type: 'select', options: FACTURATIONS, def: FACTURATIONS[0] },
+  { k: 'validiteJours', label: 'Validité (jours)', type: 'number', step: '1', min: 0, def: 30 },
+  { k: 'jours', label: 'Nombre de jours', type: 'number', step: '0.5', min: 0 },
+  { k: 'tjm', label: 'TJM HT (€)', type: 'number', step: '1', min: 0 },
+  { k: 'montantHT', label: 'Montant HT (€)', type: 'number', step: '0.01', min: 0, required: true },
+  { k: 'relance', label: 'Date de relance', type: 'date' },
+  { k: 'relanceFaite', label: 'Relance faite', type: 'checkbox' },
+  { k: 'dateDecision', label: 'Date de décision client', type: 'date' },
+  { k: 'lienPDF', label: 'Emplacement du PDF (OneDrive ou lien)', full: true, placeholder: 'ex. DC-PI\\02-COMMERCIAL\\Devis\\DCPI-26-001.pdf' },
+  { k: 'notes', label: 'Notes (concurrence, motif de refus…)', type: 'textarea', full: true }
+];
+function editDevis(d, presetClient) {
+  const v0 = d || { numero: nextDevisNumero(todayStr()), dateEmission: todayStr(), clientId: presetClient || '', validiteJours: 30, tjm: SETTINGS.tjmDefaut || null };
+  formModal(d ? `Devis ${d.numero}` : 'Nouveau devis', DEVIS_FIELDS(), v0, async v => {
+    v.numero = v.numero.toUpperCase();
+    if (DB.devis.some(x => x.numero === v.numero && x.id !== d?.id)) { toast('Ce numéro de devis existe déjà', true); return false; }
+    if (['Accepté', 'Refusé'].includes(v.statut) && !v.dateDecision) v.dateDecision = todayStr();
+    await Store.save('devis', { ...(d || {}), ...v });
+    toast(d ? 'Devis modifié' : 'Devis créé');
+    if (v.statut === 'Accepté' && !d?.projetId && d?.statut !== 'Accepté') toast('Devis accepté : cliquez sur « Créer le projet » dans la liste des devis.');
+  }, {
+    submitLabel: d ? 'Enregistrer' : 'Créer le devis',
+    onDelete: d ? async () => safe(() => Store.remove('devis', d.id), 'Devis supprimé') : null,
+    onOpen: form => {
+      const E = form.elements; let manuel = !!(d && d.montantHT);
+      E.montantHT.addEventListener('input', () => manuel = true);
+      const calc = () => { if (manuel || E.facturation.value === 'Forfait') return; const j = parseFloat(E.jours.value), t = parseFloat(E.tjm.value); if (j > 0 && t > 0) E.montantHT.value = Math.round(j * t * 100) / 100; };
+      E.jours.addEventListener('input', calc); E.tjm.addEventListener('input', calc);
+      if (!d) E.dateEmission.addEventListener('change', () => { E.numero.value = nextDevisNumero(E.dateEmission.value); });
+      if (d) {
+        const box = document.createElement('div'); box.className = 'full small muted';
+        box.innerHTML = `Fin de validité : <b>${fmtDate(finValidite(d)) || '—'}</b>${devisPerime(d) ? ' <span class="late">(dépassée)</span>' : ''}${d.projetId ? ` · Projet lié : <b>${esc(byId('projets', d.projetId)?.code || '?')}</b>` : ''}`;
+        form.querySelector('.grid-form').appendChild(box);
+      }
+    }
+  });
+}
+function creerProjetDepuisDevis(d) {
+  const regie = d.facturation !== 'Forfait';
+  editProjet(null, d.clientId, {
+    nom: d.objet, statut: 'En cours', facturation: d.facturation || FACTURATIONS[0],
+    tjm: d.tjm || null, budgetJours: d.jours || null, montantForfait: regie ? null : d.montantHT,
+    dateDebut: d.dateDecision || todayStr(), description: `Devis ${d.numero} accepté le ${fmtDate(d.dateDecision || todayStr())}`, devisId: d.id
+  }, async pid => { await Store.save('devis', { ...d, statut: 'Accepté', projetId: pid, dateDecision: d.dateDecision || todayStr() }); });
+}
+function devisRows() {
+  const q = DV.q.toLowerCase();
+  return DB.devis.filter(d => (!DV.statut || (DV.statut === 'attente' ? d.statut === 'Envoyé' : d.statut === DV.statut)) && (!DV.client || d.clientId === DV.client) &&
+    (!DV.annee || (d.dateEmission || '').startsWith(DV.annee)) &&
+    (!q || [d.numero, d.objet, clientNom(d.clientId), d.notes].join(' ').toLowerCase().includes(q)))
+    .sort((a, b) => (b.numero || '').localeCompare(a.numero || ''));
+}
+function devisTableHTML() {
+  const rows = devisRows();
+  if (!rows.length) return '<div class="empty">Aucun devis pour ces filtres.</div>';
+  return `<div class="table-wrap"><table class="lst"><thead><tr><th>N°</th><th>Date</th><th>Client</th><th>Objet</th><th class="num">Montant HT</th><th>Statut</th><th>Validité</th><th>Relance</th><th>Projet</th></tr></thead><tbody>
+    ${rows.map(d => `<tr class="click" data-act="devis-edit" data-id="${d.id}">
+      <td><b>${esc(d.numero)}</b></td><td>${fmtDate(d.dateEmission)}</td><td>${esc(clientNom(d.clientId))}</td><td class="wrap">${esc(d.objet)}</td>
+      <td class="num">${eur(d.montantHT)}</td><td>${badge(d.statut)}</td>
+      <td class="${devisPerime(d) ? 'late' : ''}">${fmtDate(finValidite(d))}</td>
+      <td class="${d.statut === 'Envoyé' && d.relance && !d.relanceFaite && d.relance < todayStr() ? 'late' : ''}">${d.statut === 'Envoyé' && d.relance ? fmtDate(d.relance) + (d.relanceFaite ? ' ✓' : '') : ''}</td>
+      <td>${d.projetId ? `<a href="#" data-act="prj-open" data-id="${d.projetId}">${esc(byId('projets', d.projetId)?.code || '?')}</a>`
+        : d.statut === 'Accepté' ? `<button class="btn sm accent" data-act="devis-projet" data-id="${d.id}">Créer le projet</button>` : ''}</td></tr>`).join('')}
+    </tbody><tfoot><tr><td colspan="4">${rows.length} devis</td><td class="num">${eur(sum(rows, d => d.montantHT))}</td><td colspan="4"></td></tr></tfoot></table></div>`;
+}
+VIEWS.devis = () => {
+  const an = DV.annee || String(new Date().getFullYear());
+  const dA = DB.devis.filter(d => (d.dateEmission || '').startsWith(an));
+  const att = DB.devis.filter(d => d.statut === 'Envoyé');
+  const acc = dA.filter(d => d.statut === 'Accepté'), dec = dA.filter(d => ['Accepté', 'Refusé', 'Expiré'].includes(d.statut));
+  const taux = dec.length ? acc.length / dec.length * 100 : null;
+  const tauxM = sum(dec, d => d.montantHT) ? sum(acc, d => d.montantHT) / sum(dec, d => d.montantHT) * 100 : null;
+  const annees = [...new Set([String(new Date().getFullYear()), ...DB.devis.map(d => (d.dateEmission || '').slice(0, 4)).filter(Boolean)])].sort().reverse();
+  return `<div class="kpis">
+      <div class="kpi"><b>${att.length}</b><span>Devis en attente de réponse</span></div>
+      <div class="kpi"><b>${eur(sum(att, d => d.montantHT))}</b><span>Montant en attente (HT)</span></div>
+      <div class="kpi"><b>${eur(sum(acc, d => d.montantHT))}</b><span>Accepté en ${an} (HT)</span></div>
+      <div class="kpi"><b>${taux == null ? '—' : num(taux, 0) + ' %'}</b><span>Taux de transformation ${an}${tauxM == null ? '' : ` (${num(tauxM, 0)} % en montant)`}</span></div>
+    </div>
+    <div class="card">
+    <div class="row" style="margin-bottom:12px"><h2 style="margin:0">Devis</h2><div class="spacer"></div><button class="btn primary" data-act="devis-new">+ Nouveau devis</button></div>
+    <div class="grid-form" id="dv-form" style="margin-bottom:12px">
+      <div class="fld"><label>Recherche</label><input name="q" value="${esc(DV.q)}" placeholder="n°, objet, client…"></div>
+      <div class="fld"><label>Statut</label><select name="statut">${optHTML([{ v: '', l: 'Tous' }, { v: 'attente', l: 'En attente (envoyés)' }, ...DEVIS_STATUTS], DV.statut)}</select></div>
+      <div class="fld"><label>Client</label><select name="client"><option value="">Tous</option>${[...DB.clients].sort((a, b) => a.nom.localeCompare(b.nom)).map(c => `<option value="${c.id}" ${c.id === DV.client ? 'selected' : ''}>${esc(c.nom)}</option>`).join('')}</select></div>
+      <div class="fld"><label>Année</label><select name="annee"><option value="">Toutes</option>${annees.map(a => `<option ${a === DV.annee ? 'selected' : ''}>${a}</option>`).join('')}</select></div>
+    </div>
+    <div id="dv-table">${devisTableHTML()}</div>
+    <p class="small muted" style="margin-top:8px">Taux de transformation = devis acceptés ÷ devis tranchés (acceptés, refusés, expirés) de l'année. Un devis envoyé dont la validité est dépassée apparaît en rouge : passez-le en « Expiré » ou relancez le client.</p>
+  </div>`;
+};
+VIEWS.devis_after = () => {
+  const f = $('#dv-form'); if (!f) return;
+  f.addEventListener('input', e => { if (!e.target.name) return; DV[e.target.name] = e.target.value; if (e.target.name === 'annee') render(); else $('#dv-table').innerHTML = devisTableHTML(); });
+};
 
 /* ---------- FOURNISSEURS & PARTENAIRES ---------- */
 const PAR = { q: '', type: '', statut: '', sel: null };
@@ -1158,7 +1286,7 @@ VIEWS.reglages = () => `
     <form id="set-form" class="grid-form">
       ${[{ k: 'nom', label: 'Nom commercial' }, { k: 'mention', label: 'Mention sous le logo' }, { k: 'slogan', label: 'Slogan (fiches)' }, { k: 'raisonSociale', label: 'Raison sociale' }, { k: 'siret', label: 'SIRET' },
          { k: 'adresse', label: 'Adresse', full: true }, { k: 'cp', label: 'Code postal' }, { k: 'ville', label: 'Ville' }, { k: 'email', label: 'E-mail' }, { k: 'tel', label: 'Téléphone' },
-         { k: 'heuresJour', label: 'Heures par jour (conversion h → j)', type: 'number', step: '0.25', min: 1 }].map(f => fieldHTML(f, withCpVille(SETTINGS)[f.k])).join('')}
+         { k: 'heuresJour', label: 'Heures par jour (conversion h → j)', type: 'number', step: '0.25', min: 1 }, { k: 'tjmDefaut', label: 'TJM par défaut des devis (€ HT)', type: 'number', step: '1', min: 0 }].map(f => fieldHTML(f, withCpVille(SETTINGS)[f.k])).join('')}
       <div class="full"><button class="btn primary" type="submit">Enregistrer</button></div>
     </form>
   </div>
@@ -1171,7 +1299,7 @@ VIEWS.reglages = () => `
   </div>
   <div class="card small muted">
     Version ${APP_VERSION} · Mode : <b>${DEMO ? 'démo (stockage local du navigateur)' : 'Firebase'}</b> ·
-    ${DB.clients.length} clients · ${DB.partenaires.length} fournisseurs/partenaires · ${DB.projets.length} projets · ${DB.pointages.length} pointages · ${DB.interactions.length} échanges
+    ${DB.devis.length} devis · ${DB.clients.length} clients · ${DB.partenaires.length} fournisseurs/partenaires · ${DB.projets.length} projets · ${DB.pointages.length} pointages · ${DB.interactions.length} échanges
     ${DEMO ? `<div style="margin-top:8px"><button class="btn sm danger" data-act="demo-reset">Effacer les données de démo</button></div>` : ''}
   </div>`;
 VIEWS.reglages_after = () => {
@@ -1181,6 +1309,7 @@ VIEWS.reglages_after = () => {
     const v = {}; ['nom', 'mention', 'slogan', 'raisonSociale', 'siret', 'adresse', 'cp', 'ville', 'email', 'tel'].forEach(k => v[k] = f.elements[k].value.trim());
     v.cpVille = '';
     v.heuresJour = parseFloat(String(f.elements.heuresJour.value).replace(',', '.')) || 7;
+    v.tjmDefaut = parseFloat(String(f.elements.tjmDefaut.value).replace(',', '.')) || null;
     safe(() => Store.saveSettings(v), 'Réglages enregistrés');
   };
   if (f) villeAuto(f);
@@ -1240,6 +1369,11 @@ const ACTIONS = {
   'lst-sort': (el, id) => { LST.dir = LST.sort === id ? -LST.dir : (LST_COLS.find(c => c.k === id)?.num || LST_COLS.find(c => c.k === id)?.date ? -1 : 1); LST.sort = id; $('#lst-table').innerHTML = listeTableHTML(); },
   'lst-csv': () => exportListeCSV(),
   'prj-new': () => editProjet(null),
+  'devis-new': () => editDevis(null),
+  'devis-new-for': (el, id) => editDevis(null, id),
+  'devis-edit': (el, id) => { const d = byId('devis', id); if (d) editDevis(d); },
+  'devis-projet': (el, id) => { const d = byId('devis', id); if (d) creerProjetDepuisDevis(d); },
+  'devis-relance-ok': (el, id) => { const d = byId('devis', id); if (d) safe(() => Store.save('devis', { ...d, relanceFaite: true }), 'Relance marquée faite'); },
   'prj-new-for': (el, id) => editProjet(null, id),
   'prj-edit': (el, id) => editProjet(byId('projets', id)),
   'tache-new': (el, id) => editTache(id, null),
