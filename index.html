@@ -175,6 +175,7 @@ tr.click{cursor:pointer} tr.click:hover td{background:#F8F7F2}
 .fiche .f-visa{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:20px;page-break-inside:avoid}
 .fiche .f-visa div{border:1px solid #D6D2C6;border-radius:6px;padding:8px 10px;min-height:34mm;font-size:8.8pt}
 .fiche .f-visa b{display:block;color:var(--basalte);margin-bottom:4px}
+.fiche .f-sig{display:block;max-height:24mm;max-width:70mm;margin-top:4px}
 .fiche .f-foot{margin-top:14px;font-size:7.5pt;color:#777;text-align:center;border-top:1px solid #DDD;padding-top:6px}
 #print-area{display:none}
 @media print{
@@ -1241,7 +1242,7 @@ function partDetail(o) {
 }
 
 /* ---------- FICHES DE POINTAGE ---------- */
-const FI = { clientId: '', projetId: '', mode: 'mois', mois: todayStr().slice(0, 7), du: '', au: '', factOnly: true, montant: false, detail: true };
+const FI = { clientId: '', projetId: '', mode: 'mois', mois: todayStr().slice(0, 7), du: '', au: '', factOnly: true, montant: false, detail: true, signer: true };
 function fichePeriode() {
   return FI.mode === 'mois' ? { du: FI.mois + '-01', au: lastDayOfMonth(FI.mois), label: fmtMonth(FI.mois) }
     : { du: FI.du, au: FI.au, label: `du ${fmtDate(FI.du)} au ${fmtDate(FI.au)}` };
@@ -1284,13 +1285,14 @@ function ficheHTML() {
     <div class="f-blocks">
       <div class="f-block"><b class="h">Client</b><b>${esc(c.nom)}</b><br>${esc(c.adresse || '')}${c.adresse ? '<br>' : ''}${esc(cpv(c))}
         ${contact ? `<br>À l'attention de : ${esc(nomContact(contact))}${contact.fonction ? ', ' + esc(contact.fonction) : ''}` : ''}</div>
-      <div class="f-block"><b class="h">Intervenant</b>${esc(USER?.displayName || S.raisonSociale || S.nom)}<br>
+      <div class="f-block"><b class="h">Intervenant</b>${esc(S.signataire || USER?.displayName || S.raisonSociale || S.nom)}<br>
         Base de calcul : 1 jour = ${num(hJ())} h<br>${FI.factOnly ? 'Temps facturable uniquement' : 'Tous les temps pointés'}</div>
     </div>
     <table><thead><tr>${FI.detail ? '<th>Date</th><th>Tâche</th><th>Travaux réalisés</th><th>Lieu</th>' : '<th>Projet</th>'}<th class="num">Heures</th><th class="num">Jours</th></tr></thead>
       <tbody>${rows}</tbody></table>
     <div class="f-visa">
-      <div><b>L'intervenant</b>Date :<br><br>Signature :</div>
+      <div><b>L'intervenant</b>${esc(S.signataire || USER?.displayName || '')}${S.signataire || USER?.displayName ? '<br>' : ''}Date : ${FI.signer ? fmtDate(todayStr()) : ''}<br>
+        ${FI.signer && S.signature ? `<img src="${S.signature}" alt="Signature" class="f-sig">` : '<br>Signature :'}</div>
       <div><b>Le client — Bon pour accord</b>Nom, fonction :<br><br>Date :<br><br>Signature et cachet :</div>
     </div>
     <div class="f-foot">${esc([S.raisonSociale || S.nom, S.siret ? 'SIRET ' + S.siret : '', S.adresse, cpv(S)].filter(Boolean).join(' · '))}</div>
@@ -1310,6 +1312,7 @@ VIEWS.fiches = () => {
       <label class="fld chk"><input type="checkbox" name="factOnly" ${FI.factOnly ? 'checked' : ''}> Facturable uniquement</label>
       <label class="fld chk"><input type="checkbox" name="detail" ${FI.detail ? 'checked' : ''}> Détail par jour</label>
       <label class="fld chk"><input type="checkbox" name="montant" ${FI.montant ? 'checked' : ''}> Afficher les montants (TJM)</label>
+      <label class="fld chk"><input type="checkbox" name="signer" ${FI.signer ? 'checked' : ''}> Dater et signer${SETTINGS.signature ? '' : ' <span class="small muted">(signature à ajouter dans Réglages)</span>'}</label>
     </div>
     <div class="row" style="margin-top:14px"><button class="btn primary" data-act="fiche-print">Imprimer / Enregistrer en PDF</button>
       <span class="small muted">Dans la fenêtre d'impression, choisissez « Enregistrer au format PDF ».</span></div>
@@ -1349,6 +1352,18 @@ VIEWS.reglages = () => `
       <div class="full"><button class="btn primary" type="submit">Enregistrer</button></div>
     </form>
   </div>
+  <div class="card"><h2>Signature</h2>
+    <p class="small muted">Apposée automatiquement, avec la date du jour, dans le cadre « L'intervenant » des fiches de pointage. Idéal : signature à l'encre foncée, scannée ou photographiée sur fond blanc (le blanc est rendu transparent).</p>
+    <div class="grid-form">
+      ${fieldHTML({ k: 'signataire', label: 'Nom du signataire', placeholder: 'ex. Damien C., gérant' }, SETTINGS.signataire)}
+      <div class="fld"><label>Image de signature</label><label class="btn" style="display:inline-block">Choisir une image…<input type="file" id="sig-file" accept="image/png,image/jpeg,image/webp" hidden></label></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      ${SETTINGS.signature ? `<img src="${SETTINGS.signature}" alt="Signature" style="max-height:70px;max-width:260px;border:1px dashed var(--line);border-radius:6px;padding:4px;background:#fff">
+        <button class="btn sm danger" type="button" id="sig-del">Retirer la signature</button>` : '<span class="empty">Aucune signature enregistrée.</span>'}
+      <div class="spacer"></div><button class="btn primary sm" type="button" id="sig-save">Enregistrer le nom</button>
+    </div>
+  </div>
   <div class="card"><h2>Référentiel WBS (N2)</h2>
     <p class="small muted">Lots standard utilisés pour coder les tâches : <b>CODEPROJET-N2-N3</b> (ex. MJVA-01-7-1). Modifier un libellé ne change pas les codes existants.</p>
     <div id="wbs-ed">${wbsList().map(w => `<div class="row wbs-row" style="margin-bottom:6px;flex-wrap:nowrap">
@@ -1368,7 +1383,28 @@ VIEWS.reglages = () => `
     ${DB.devis.length} devis · ${DB.clients.length} clients · ${DB.partenaires.length} fournisseurs/partenaires · ${DB.projets.length} projets · ${DB.pointages.length} pointages · ${DB.interactions.length} échanges
     ${DEMO ? `<div style="margin-top:8px"><button class="btn sm danger" data-act="demo-reset">Effacer les données de démo</button></div>` : ''}
   </div>`;
+// Image de signature : redimensionnée (max 600×200), fond blanc rendu transparent, stockée dans les réglages
+function chargerSignature(file) {
+  if (!/^image\//.test(file.type)) return toast('Choisissez une image (PNG ou JPG)', true);
+  const img = new Image(), url = URL.createObjectURL(file);
+  img.onload = () => {
+    const k = Math.min(1, 600 / img.width, 200 / img.height);
+    const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    const g = c.getContext('2d'); g.drawImage(img, 0, 0, c.width, c.height);
+    const d = g.getImageData(0, 0, c.width, c.height), px = d.data;
+    for (let i = 0; i < px.length; i += 4) { const l = (px[i] + px[i + 1] + px[i + 2]) / 3; if (l > 215) px[i + 3] = 0; else if (l > 160) px[i + 3] = Math.round(px[i + 3] * (215 - l) / 55); }
+    g.putImageData(d, 0, 0); URL.revokeObjectURL(url);
+    const data = c.toDataURL('image/png');
+    if (data.length > 700000) return toast('Image trop lourde : recadrez-la au plus près de la signature', true);
+    safe(() => Store.saveSettings({ signature: data }), 'Signature enregistrée');
+  };
+  img.onerror = () => toast('Image illisible', true);
+  img.src = url;
+}
 VIEWS.reglages_after = () => {
+  const sf = $('#sig-file'); if (sf) sf.onchange = () => { if (sf.files[0]) chargerSignature(sf.files[0]); sf.value = ''; };
+  const sd = $('#sig-del'); if (sd) sd.onclick = () => { if (confirm('Retirer la signature ?')) safe(() => Store.saveSettings({ signature: '' }), 'Signature retirée'); };
+  const ss = $('#sig-save'); if (ss) ss.onclick = () => safe(() => Store.saveSettings({ signataire: $('#f_signataire').value.trim() }), 'Nom du signataire enregistré');
   const ed = $('#wbs-ed');
   if (ed) {
     const rowHTML = n => `<div class="row wbs-row" style="margin-bottom:6px;flex-wrap:nowrap"><input type="number" min="0" step="1" value="${n}" style="width:70px" data-k="n"><input value="" data-k="lib" placeholder="Libellé"><button class="btn sm danger" type="button" data-wbs-del>✕</button></div>`;
