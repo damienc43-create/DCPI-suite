@@ -182,6 +182,13 @@ tr.click{cursor:pointer} tr.click:hover td{background:#F8F7F2}
 .fiche .f-visa b{display:block;color:var(--basalte);margin-bottom:4px}
 .fiche .f-maj{color:var(--cuivre);font-size:7.5pt;font-weight:700}
 .fiche .f-sig{display:block;max-height:24mm;max-width:70mm;margin-top:4px}
+.fiche{position:relative}
+.fiche .f-draft{position:absolute;top:42%;left:0;right:0;text-align:center;font:800 64pt Montserrat,sans-serif;color:rgba(181,139,98,.16);transform:rotate(-28deg);pointer-events:none;letter-spacing:.08em;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.fiche .f-title .f-st{display:inline-block;margin-top:4px;font-size:7.5pt;font-weight:700;letter-spacing:.06em;padding:1px 7px;border-radius:4px}
+.fiche .f-st.draft{border:1px solid var(--cuivre);color:var(--cuivre)}
+.fiche .f-st.off{background:var(--vert);color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.wk-lock{font-size:.7rem;margin-left:3px}
+.fi-status{margin-top:12px;padding:8px 12px;border-radius:6px;background:#F3F1EA;font-size:.85rem}
 .fiche .f-foot{margin-top:14px;font-size:7.5pt;color:#777;text-align:center;border-top:1px solid #DDD;padding-top:6px}
 #print-area{display:none}
 @media print{
@@ -256,7 +263,7 @@ const FIREBASE_CONFIG = {
 const ALLOWED_EMAIL = "damienc43@gmail.com";
 
 /* ===================================================================== */
-const APP_VERSION = '1.11';
+const APP_VERSION = '1.12';
 const DEMO = FIREBASE_CONFIG.apiKey === 'A_REMPLIR';
 const SDK_KO = !DEMO && typeof firebase === 'undefined';  // config présente mais Firebase non chargé
 const COLS = ['clients', 'interactions', 'projets', 'pointages', 'partenaires', 'devis'];
@@ -470,7 +477,7 @@ function formModal(title, fields, values, onSubmit, opts = {}) {
     </form></div>`;
   const form = $('#mform');
   $('#m-cancel').onclick = closeModal;
-  if (opts.onDelete) $('#m-del').onclick = async () => { if (confirm('Confirmer la suppression ?')) { await opts.onDelete(); closeModal(); } };
+  if (opts.onDelete) $('#m-del').onclick = async () => { if (confirm(opts.deleteConfirm || 'Confirmer la suppression ?')) { await opts.onDelete(); closeModal(); } };
   form.onsubmit = async e => {
     e.preventDefault();
     const out = {};
@@ -575,11 +582,15 @@ function editPointage(x, date) {
   ], { ...v0, majPct: x ? majPt(x) : majAuto(v0.date).pct }, async v => {
     if (!(v.heures > 0) || v.heures > 24) { toast('Nombre d\'heures invalide', true); return false; }
     if (v.majPct == null) v.majPct = 0;
+    if (x?.ficheRef && ['date', 'heures', 'projetId', 'tacheId', 'lieu', 'facturable', 'majPct', 'description'].some(k => String(v[k] ?? '') !== String((k === 'majPct' ? majPt(x) : x[k]) ?? ''))
+      && !confirm(`🔒 Ce pointage figure dans la fiche officielle ${x.ficheRef} émise le ${fmtDate(x.ficheLe)}.\n\nLe modifier rendra la fiche envoyée au client différente de vos données.\n\nEnregistrer quand même ?`)) return false;
     await Store.save('pointages', { ...(x || {}), ...v });
     PT.last = { projetId: v.projetId, lieu: v.lieu };
     toast(x ? 'Pointage modifié' : 'Pointage ajouté');
   }, {
     submitLabel: x ? 'Enregistrer' : 'Ajouter',
+    intro: x?.ficheRef ? `🔒 <b>Pointage verrouillé</b> : inclus dans la fiche officielle <b>${esc(x.ficheRef)}</b> émise le ${fmtDate(x.ficheLe)}. Toute modification ou suppression sera demandée en confirmation.` : '',
+    deleteConfirm: x?.ficheRef ? `🔒 Ce pointage figure dans la fiche officielle ${x.ficheRef} émise le ${fmtDate(x.ficheLe)}, déjà envoyée au client.\n\nLe supprimer quand même ?` : null,
     onDelete: x ? async () => safe(() => Store.remove('pointages', x.id), 'Pointage supprimé') : null,
     onOpen: form => {
       const sel = form.elements.projetId, tk = form.elements.tacheId;
@@ -600,8 +611,8 @@ function editPointage(x, date) {
 }
 function cardPt(x) {
   const pj = byId('projets', x.projetId), tk = pj?.taches?.find(t => t.id === x.tacheId);
-  return `<div class="wk-card" style="border-left-color:${prjColor(x.projetId)}" data-act="pt-edit" data-id="${x.id}" title="${esc(clientNom(pj?.clientId))}">
-    <div><b style="color:${prjColor(x.projetId)}">${esc(pj?.code || '?')}</b> <span class="wk-h">${num(x.heures)} h</span>${majPt(x) ? ` <span class="wk-maj">+${majPt(x)} %</span>` : ''}${x.facturable ? '' : ' <span class="small muted">NF</span>'}</div>
+  return `<div class="wk-card" style="border-left-color:${prjColor(x.projetId)}" data-act="pt-edit" data-id="${x.id}" title="${esc(clientNom(pj?.clientId))}${x.ficheRef ? ' · 🔒 ' + esc(x.ficheRef) : ''}">
+    <div><b style="color:${prjColor(x.projetId)}">${esc(pj?.code || '?')}</b> <span class="wk-h">${num(x.heures)} h</span>${majPt(x) ? ` <span class="wk-maj">+${majPt(x)} %</span>` : ''}${x.facturable ? '' : ' <span class="small muted">NF</span>'}${x.ficheRef ? ` <span class="wk-lock" title="Fiche ${esc(x.ficheRef)} émise le ${fmtDate(x.ficheLe)}">🔒</span>` : ''}</div>
     ${tk && tacheCode(pj, tk) ? `<div class="wk-code">${esc(tacheCode(pj, tk))}</div>` : ''}
     <div class="wk-sub">${esc(tk?.nom || pj?.nom || 'Projet supprimé')}</div>
     ${x.description ? `<div class="wk-desc">${esc(x.description)}</div>` : ''}</div>`;
@@ -1301,19 +1312,27 @@ function fichePeriode() {
   return FI.mode === 'mois' ? { du: FI.mois + '-01', au: lastDayOfMonth(FI.mois), label: fmtMonth(FI.mois) }
     : { du: FI.du, au: FI.au, label: `du ${fmtDate(FI.du)} au ${fmtDate(FI.au)}` };
 }
-function ficheHTML() {
+// Sélection commune à l'aperçu et à l'émission : client, période, pointages retenus, référence
+function ficheSel() {
   const c = byId('clients', FI.clientId);
-  if (!c) return '<p class="empty">Choisissez un client.</p>';
+  if (!c) return { err: 'Choisissez un client.' };
   const per = fichePeriode();
-  if (!per.du || !per.au) return '<p class="empty">Indiquez la période.</p>';
+  if (!per.du || !per.au) return { err: 'Indiquez la période.' };
   const prjIds = DB.projets.filter(p => p.clientId === c.id && (!FI.projetId || p.id === FI.projetId)).map(p => p.id);
   const pts = DB.pointages.filter(x => prjIds.includes(x.projetId) && x.date >= per.du && x.date <= per.au && (!FI.factOnly || x.facturable))
     .sort((a, b) => a.date.localeCompare(b.date) || (a.createdAt || '').localeCompare(b.createdAt || ''));
-  if (!pts.length) return '<p class="empty">Aucun pointage pour ce client sur cette période.</p>';
+  if (!pts.length) return { err: 'Aucun pointage pour ce client sur cette période.' };
+  const ref = `FP-${per.du.slice(0, 7).replace('-', '')}-${FI.projetId ? byId('projets', FI.projetId).code : clientCode(c)}`;
+  return { c, per, prjIds, pts, ref };
+}
+function ficheHTML(officiel = false) {
+  const sel = ficheSel();
+  if (sel.err) return `<p class="empty">${sel.err}</p>`;
+  const { c, per, prjIds, pts } = sel;
   const groups = prjIds.map(id => byId('projets', id)).filter(p => pts.some(x => x.projetId === p.id))
     .sort((a, b) => a.code.localeCompare(b.code));
   const contact = (c.contacts || []).find(x => x.principal) || (c.contacts || [])[0];
-  const ref = `FP-${per.du.slice(0, 7).replace('-', '')}-${FI.projetId ? byId('projets', FI.projetId).code : clientCode(c)}`;
+  const ref = sel.ref;
   const S = SETTINGS;
   let rows = '', totH = 0, totHq = 0, totM = 0, hasM = false;
   const colspan = FI.detail ? 4 : 1;
@@ -1339,10 +1358,11 @@ function ficheHTML() {
   rows += `<tr class="tot"><td colspan="${colspan}" style="text-align:right">TOTAL PÉRIODE</td>${MAJ ? `<td class="num">${num(totH)} h</td><td class="num">${num(totHq)} h</td><td class="num">${num(jours(totHq))} j</td>` : `<td class="num">${num(totH)} h</td><td class="num">${num(jours(totH))} j</td>`}</tr>`;
   if (hasM) rows += `<tr class="mt"><td colspan="${colspan}" style="text-align:right">TOTAL HT</td><td colspan="${nc}" class="num">${eur(totM)}</td></tr>`;
   return `<div class="fiche">
+    ${officiel ? '' : '<div class="f-draft">BROUILLON</div>'}
     <div class="f-head">
       <div><div class="logo dark">${logoHTML(true)}</div>
         <div class="f-ident">${esc(S.raisonSociale || S.nom)}<br>${esc(S.adresse)}${S.adresse ? '<br>' : ''}${esc(cpv(S))}<br>${esc([S.email, S.tel].filter(Boolean).join(' · '))}</div></div>
-      <div class="f-title"><h1>FICHE DE POINTAGE</h1><div>Réf. ${esc(ref)}</div><div>Période : <b>${esc(per.label)}</b></div><div>Éditée le ${fmtDate(todayStr())}</div></div>
+      <div class="f-title"><h1>FICHE DE POINTAGE</h1><div>Réf. ${esc(ref)}</div><div>Période : <b>${esc(per.label)}</b></div><div>${officiel ? 'Émise' : 'Éditée'} le ${fmtDate(todayStr())}</div><span class="f-st ${officiel ? 'off' : 'draft'}">${officiel ? 'FICHE OFFICIELLE' : 'BROUILLON — NON VALABLE'}</span></div>
     </div>
     <table class="f-info"><tbody>
       <tr><th>Nom prénom intervenant</th><td>${esc(S.signataire || USER?.displayName || S.raisonSociale || S.nom)}</td></tr>
@@ -1381,8 +1401,11 @@ VIEWS.fiches = () => {
       <label class="fld chk"><input type="checkbox" name="montant" ${FI.montant ? 'checked' : ''}> Afficher les montants (TJM)</label>
       <label class="fld chk"><input type="checkbox" name="signer" ${FI.signer ? 'checked' : ''}> Dater et signer${SETTINGS.signature ? '' : ' <span class="small muted">(signature à ajouter dans Réglages)</span>'}</label>
     </div>
-    <div class="row" style="margin-top:14px"><button class="btn primary" data-act="fiche-print">Imprimer / Enregistrer en PDF</button>
-      <span class="small muted">Dans la fenêtre d'impression, choisissez « Enregistrer au format PDF ».</span></div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn" data-act="fiche-print">Éditer un brouillon</button>
+      <button class="btn primary" data-act="fiche-emit">🔒 Émettre la fiche officielle</button>
+      <span class="small muted">Brouillon : pointages libres. Fiche officielle : les pointages inclus sont verrouillés. Dans la fenêtre d'impression, choisissez « Enregistrer au format PDF ».</span></div>
+    ${ficheStatusHTML()}
   </div>
   <div class="fiche-wrap" id="fiche-preview">${ficheHTML()}</div>`;
 };
@@ -1396,13 +1419,29 @@ VIEWS.fiches_after = () => {
     render();
   });
 };
-function printFiche() {
-  const html = ficheHTML();
+function ficheStatusHTML() {
+  const sel = ficheSel(); if (sel.err) return '';
+  const lock = sel.pts.filter(x => x.ficheRef), refs = [...new Set(lock.map(x => `${x.ficheRef} (émise le ${fmtDate(x.ficheLe)})`))];
+  if (!lock.length) return `<div class="fi-status">${sel.pts.length} pointage(s) sur la période · aucun encore verrouillé.</div>`;
+  const libres = sel.pts.length - lock.length;
+  return `<div class="fi-status">🔒 ${lock.length} / ${sel.pts.length} pointage(s) déjà verrouillé(s) — ${esc(refs.join(', '))}.${libres ? ` <b>${libres} pointage(s) ajouté(s) ou modifié(s) depuis ne sont pas verrouillés.</b>` : ''}</div>`;
+}
+async function emitFiche() {
+  const sel = ficheSel();
+  if (sel.err) return toast('Rien à émettre : ' + sel.err, true);
+  const deja = sel.pts.filter(x => x.ficheRef && x.ficheRef !== sel.ref);
+  if (!confirm(`Émettre la fiche officielle ${sel.ref} ?\n\n${sel.pts.length} pointage(s) seront verrouillés : vous pourrez toujours les modifier ou les supprimer, mais avec une confirmation.${deja.length ? `\n\nAttention : ${deja.length} pointage(s) figurent déjà dans une autre fiche (${[...new Set(deja.map(x => x.ficheRef))].join(', ')}).` : ''}`)) return;
+  const le = todayStr(), aFaire = sel.pts.filter(x => x.ficheRef !== sel.ref || x.ficheLe !== le);
+  const ok = await safe(async () => { for (const x of aFaire) await Store.save('pointages', { ...x, ficheRef: sel.ref, ficheLe: le }); return true; }, `Fiche ${sel.ref} émise · ${sel.pts.length} pointage(s) verrouillé(s)`);
+  if (ok) printFiche(true);
+}
+function printFiche(officiel = false) {
+  const html = ficheHTML(officiel);
   if (!html.includes('class="fiche"')) return toast('Rien à imprimer : vérifiez client et période.', true);
   $('#print-area').innerHTML = html;
   const c = byId('clients', FI.clientId), per = fichePeriode();
   const old = document.title;
-  document.title = `Fiche-pointage_${slug(c?.nom)}_${FI.mode === 'mois' ? FI.mois : per.du + '_' + per.au}`;
+  document.title = `${officiel ? '' : 'BROUILLON_'}Fiche-pointage_${slug(c?.nom)}_${FI.mode === 'mois' ? FI.mois : per.du + '_' + per.au}`;
   const restore = () => { document.title = old; $('#print-area').innerHTML = ''; window.removeEventListener('afterprint', restore); };
   window.addEventListener('afterprint', restore);
   window.print();
@@ -1566,7 +1605,8 @@ const ACTIONS = {
   'tache-new': (el, id) => editTache(id, null),
   'tache-edit': (el, id) => editTache(id, el.dataset.t),
   'fiche-from-prj': (el, id) => { const p = byId('projets', id); FI.clientId = p.clientId; FI.projetId = p.id; go('fiches'); },
-  'fiche-print': () => printFiche(),
+  'fiche-print': () => printFiche(false),
+  'fiche-emit': () => emitFiche(),
   'pt-nav': (el, id) => {
     const n = +id, t = todayStr();
     if (PT.mode === 'mois') { if (!n) PT.mois = t.slice(0, 7); else { const d = parseISO(PT.mois + '-01'); d.setMonth(d.getMonth() + n); PT.mois = toISO(d).slice(0, 7); } }
@@ -1577,7 +1617,7 @@ const ACTIONS = {
   'pt-goweek': (el, id) => { PT.week = mondayOf(id); PT.mode = 'semaine'; render(); },
   'pt-add': (el, id) => editPointage(null, id),
   'pt-edit': (el, id) => { const x = byId('pointages', id); if (x) editPointage(x); },
-  'pt-del': (el, id) => { if (confirm('Supprimer ce pointage ?')) safe(() => Store.remove('pointages', id), 'Pointage supprimé'); },
+  'pt-del': (el, id) => { const x = byId('pointages', id); if (confirm(x?.ficheRef ? `🔒 Ce pointage figure dans la fiche officielle ${x.ficheRef} émise le ${fmtDate(x.ficheLe)}.\n\nLe supprimer quand même ?` : 'Supprimer ce pointage ?')) safe(() => Store.remove('pointages', id), 'Pointage supprimé'); },
   'demo-reset': () => { if (confirm('Effacer toutes les données de démo de ce navigateur ?')) { localStorage.removeItem(DEMO_KEY); location.reload(); } }
 };
 document.addEventListener('click', e => {
