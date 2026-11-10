@@ -207,7 +207,7 @@ tr.click{cursor:pointer} tr.click:hover td{background:#F8F7F2}
 <div id="login" hidden>
   <div class="box">
     <div class="logo dark" data-logo></div>
-    <p>Suite de gestion : CRM, projets, pointages</p>
+    <p>Suite de gestion : contacts, projets, pointages</p>
     <button class="btn primary" id="btn-login" style="width:100%;padding:11px">Se connecter avec Google</button>
     <p class="err" id="login-err"></p>
   </div>
@@ -227,7 +227,7 @@ tr.click{cursor:pointer} tr.click:hover td{background:#F8F7F2}
       <button data-view="devis">Devis</button>
       <button data-view="liste">Liste des projets</button>
       <button data-view="projets">Suivi projet</button>
-      <button data-view="crm">CRM</button>
+      <button data-view="crm">Contacts</button>
       <button data-view="partenaires">Fournisseurs &amp; partenaires</button>
       <button data-view="fiches">Fiches de pointage</button>
       <button data-view="reglages">Réglages</button>
@@ -263,7 +263,7 @@ const FIREBASE_CONFIG = {
 const ALLOWED_EMAIL = "damienc43@gmail.com";
 
 /* ===================================================================== */
-const APP_VERSION = '1.12';
+const APP_VERSION = '1.13';
 const DEMO = FIREBASE_CONFIG.apiKey === 'A_REMPLIR';
 const SDK_KO = !DEMO && typeof firebase === 'undefined';  // config présente mais Firebase non chargé
 const COLS = ['clients', 'interactions', 'projets', 'pointages', 'partenaires', 'devis'];
@@ -706,7 +706,7 @@ const PROJET_FIELDS = () => [
 function editProjet(p, presetClient, preset = {}, afterCreate = null) {
   const pv = p ? { ...p, devisId: p.devisId || DB.devis.find(d => d.projetId === p.id)?.id || '' } : null;
   formModal(p ? 'Modifier le projet' : 'Nouveau projet', PROJET_FIELDS(), pv || { code: nextProjetCode(presetClient), clientId: presetClient || '', ...preset }, async v => {
-    if (!DB.clients.length) { toast('Créez d\'abord un client dans le CRM', true); return false; }
+    if (!DB.clients.length) { toast('Créez d\'abord un client dans Contacts', true); return false; }
     v.code = v.code.toUpperCase();
     if (DB.projets.some(x => x.code === v.code && x.id !== p?.id)) { toast('Ce code projet existe déjà', true); return false; }
     const cl = byId('clients', v.clientId);
