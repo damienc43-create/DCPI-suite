@@ -26,19 +26,35 @@ a{color:var(--vert)}
 /* ---------- Logo ---------- */
 .logo{display:inline-block;line-height:0}
 .logo svg{display:block;width:100%;height:auto}
-header .logo{width:150px}
 #login .logo{width:300px;max-width:100%;margin-bottom:8px}
 
-/* ---------- Header ---------- */
-header.top{background:var(--basalte);color:#fff;position:sticky;top:0;z-index:20;box-shadow:0 2px 6px rgba(0,0,0,.15)}
-.top-row{display:flex;align-items:center;gap:16px;padding:10px 16px;max-width:1280px;margin:0 auto}
-.top-row .spacer{flex:1}
-.who{font-size:.82rem;opacity:.85;text-align:right}
-.who button{background:none;border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:6px;padding:2px 8px;cursor:pointer;margin-left:6px}
-nav.tabs{display:flex;gap:2px;overflow-x:auto;max-width:1280px;margin:0 auto;padding:0 10px;scrollbar-width:none}
-nav.tabs::-webkit-scrollbar{display:none}
-nav.tabs button{background:none;border:0;color:rgba(255,255,255,.75);padding:9px 14px;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;font-weight:600}
-nav.tabs button.on{color:#fff;border-bottom-color:var(--cuivre)}
+/* ---------- Menu latéral par familles (v1.14) ---------- */
+#app:not([hidden]){display:flex;min-height:100vh}
+.side{width:226px;flex:0 0 226px;background:var(--basalte);color:#fff;position:sticky;top:0;height:100vh;overflow-y:auto;display:flex;flex-direction:column;padding:16px 10px 12px;z-index:30}
+.side .logo{width:172px;margin:0 6px 10px}
+nav.tabs{display:flex;flex-direction:column;gap:1px;flex:1}
+nav.tabs .nav-sec{font:700 .68rem Montserrat,"Segoe UI",Arial,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--cuivre);margin:16px 12px 4px}
+nav.tabs button{background:none;border:0;border-left:3px solid transparent;color:rgba(255,255,255,.78);padding:8px 12px;cursor:pointer;text-align:left;border-radius:6px;font-weight:600;font-size:.9rem}
+nav.tabs button:hover{background:rgba(255,255,255,.07);color:#fff}
+nav.tabs button.on{background:rgba(255,255,255,.11);color:#fff;border-left-color:var(--cuivre)}
+.side .who{font-size:.78rem;opacity:.85;padding:10px 8px 0;margin-top:12px;border-top:1px solid rgba(255,255,255,.14);word-break:break-all}
+.side .who button{display:block;margin-top:6px;background:none;border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:6px;padding:2px 8px;cursor:pointer}
+.col{flex:1;min-width:0}
+header.mtop,.side-bg{display:none}
+@media (max-width:860px){
+  .side{position:fixed;left:0;top:0;bottom:0;transform:translateX(-100%);transition:transform .2s;box-shadow:4px 0 18px rgba(0,0,0,.25)}
+  body.menu-open .side{transform:none}
+  body.menu-open .side-bg{display:block;position:fixed;inset:0;background:rgba(15,25,40,.4);z-index:25}
+  header.mtop{display:flex;align-items:center;gap:12px;background:var(--basalte);padding:8px 12px;position:sticky;top:0;z-index:20}
+  header.mtop .logo{width:120px}
+  #burger{background:none;border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:7px;font-size:1.2rem;line-height:1;padding:5px 10px;cursor:pointer}
+}
+/* Sous-onglets du Suivi projet */
+.subtabs{display:flex;gap:2px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-top:14px}
+.subtabs button{background:none;border:0;border-bottom:3px solid transparent;padding:8px 12px;cursor:pointer;color:var(--muted);font:600 .9rem Montserrat,"Segoe UI",Arial,sans-serif}
+.subtabs button:hover{color:var(--ink)}
+.subtabs button.on{color:var(--basalte);border-bottom-color:var(--cuivre)}
+.subtabs .soon{font-size:.66rem;color:var(--cuivre);margin-left:4px;font-weight:700}
 .demo-banner{background:#FFF4E0;color:#7A4B00;text-align:center;padding:6px 16px;font-size:.85rem;border-bottom:1px solid #F0D9B0}
 
 main{max-width:1280px;margin:0 auto;padding:18px 16px 60px}
@@ -215,28 +231,33 @@ tr.click{cursor:pointer} tr.click:hover td{background:#F8F7F2}
 
 <!-- ============ APPLICATION ============ -->
 <div id="app" hidden>
-  <header class="top">
-    <div class="top-row">
-      <div class="logo" data-logo></div>
-      <div class="spacer"></div>
-      <div class="who" id="who"></div>
-    </div>
+  <aside class="side" id="side">
+    <div class="logo" data-logo></div>
     <nav class="tabs" id="tabs">
       <button data-view="accueil">Accueil</button>
-      <button data-view="pointages">Pointages</button>
+      <div class="nav-sec">Commercial</div>
+      <button data-view="crm">Contacts</button>
       <button data-view="devis">Devis</button>
+      <button data-view="partenaires">Fournisseurs &amp; partenaires</button>
+      <div class="nav-sec">Projets</div>
       <button data-view="liste">Liste des projets</button>
       <button data-view="projets">Suivi projet</button>
-      <button data-view="crm">Contacts</button>
-      <button data-view="partenaires">Fournisseurs &amp; partenaires</button>
+      <div class="nav-sec">Temps</div>
+      <button data-view="pointages">Pointages</button>
       <button data-view="fiches">Fiches de pointage</button>
+      <div class="nav-sec">Gestion</div>
       <button data-view="reglages">Réglages</button>
     </nav>
-  </header>
-  <div class="demo-banner" id="demo-banner" hidden>
-    Mode démo : les données restent dans ce navigateur. Renseignez la configuration Firebase pour l'usage réel (voir le guide).
+    <div class="who" id="who"></div>
+  </aside>
+  <div class="side-bg" id="side-bg"></div>
+  <div class="col">
+    <header class="mtop"><button id="burger" type="button" aria-label="Menu">☰</button><div class="logo" data-logo></div></header>
+    <div class="demo-banner" id="demo-banner" hidden>
+      Mode démo : les données restent dans ce navigateur. Renseignez la configuration Firebase pour l'usage réel (voir le guide).
+    </div>
+    <main id="view"></main>
   </div>
-  <main id="view"></main>
 </div>
 
 <div id="modal-root"></div>
@@ -263,7 +284,7 @@ const FIREBASE_CONFIG = {
 const ALLOWED_EMAIL = "damienc43@gmail.com";
 
 /* ===================================================================== */
-const APP_VERSION = '1.13';
+const APP_VERSION = '1.14';
 const DEMO = FIREBASE_CONFIG.apiKey === 'A_REMPLIR';
 const SDK_KO = !DEMO && typeof firebase === 'undefined';  // config présente mais Firebase non chargé
 const COLS = ['clients', 'interactions', 'projets', 'pointages', 'partenaires', 'devis'];
@@ -501,7 +522,7 @@ function formModal(title, fields, values, onSubmit, opts = {}) {
 const VIEWS = {};
 function render() {
   if (!$('#app') || $('#app').hidden) return;
-  document.querySelectorAll('header [data-logo]').forEach(el => el.innerHTML = logoHTML(false, true));
+  document.querySelectorAll('#app [data-logo]').forEach(el => el.innerHTML = logoHTML(false, true));
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.view === VIEW));
   const y = window.scrollY;
   $('#view').innerHTML = VIEWS[VIEW]();
@@ -671,7 +692,7 @@ function ptMois() {
 }
 
 /* ---------- PROJETS ---------- */
-const PRJ = { filtre: 'actifs', sel: null };
+const PRJ = { filtre: 'actifs', sel: null, onglet: 'synthese', from: '' };
 // Codes : client sur 4 lettres (ex. MJ Valorisation → MJVA), projet = CODECLIENT-NN (ex. MJVA-01)
 const FORMES = ['SAS', 'SASU', 'SARL', 'EURL', 'SA', 'SCI', 'SNC', 'STE', 'SOCIETE', 'ETS', 'GROUPE', 'LES', 'LA', 'LE', 'L', 'DE', 'DU', 'DES', 'ET'];
 function suggestCode(nom) {
@@ -741,24 +762,60 @@ function editProjet(p, presetClient, preset = {}, afterCreate = null) {
     }
   });
 }
+// Suivi projet : un projet choisi une fois en haut, puis des sous-onglets.
+// Les sous-onglets marqués d'une version arrivent avec cette version.
+const PRJ_ONGLETS = [
+  { k: 'synthese', l: 'Synthèse' },
+  { k: 'actions', l: 'Actions', v: '1.15' },
+  { k: 'reunions', l: 'Réunions', v: '1.16' },
+  { k: 'couts', l: 'Coûts', v: '1.17' },
+  { k: 'planning', l: 'Planning', v: '1.18' },
+  { k: 'rapport', l: 'Rapport', v: '1.20' }
+];
+function projetSelectHTML() {
+  const tri = arr => [...arr].sort((a, b) => (b.code || '').localeCompare(a.code || ''));
+  const opt = p => `<option value="${p.id}" ${p.id === PRJ.sel ? 'selected' : ''}>${esc(p.code)} — ${esc(p.nom)}</option>`;
+  const actifs = tri(DB.projets.filter(p => PROJET_ACTIFS.includes(p.statut))), autres = tri(DB.projets.filter(p => !PROJET_ACTIFS.includes(p.statut)));
+  return `<select id="prj-sel" style="width:auto;max-width:100%;min-width:260px"><option value="">— Choisir un projet —</option>
+    ${actifs.length ? `<optgroup label="Projets actifs">${actifs.map(opt).join('')}</optgroup>` : ''}
+    ${autres.length ? `<optgroup label="Terminés / perdus">${autres.map(opt).join('')}</optgroup>` : ''}</select>`;
+}
 VIEWS.projets = () => {
-  if (PRJ.sel && byId('projets', PRJ.sel)) return projetDetail(byId('projets', PRJ.sel));
-  const list = DB.projets.filter(p => PRJ.filtre === 'tous' ? true : PRJ.filtre === 'actifs' ? PROJET_ACTIFS.includes(p.statut) : p.statut === PRJ.filtre)
-    .sort((a, b) => (b.code || '').localeCompare(a.code || ''));
-  return `<div class="card">
-    <div class="row" style="margin-bottom:10px"><h2 style="margin:0">Suivi projet</h2>
-      <select id="prj-filtre" style="width:auto">${optHTML([{ v: 'actifs', l: 'Actifs' }, { v: 'tous', l: 'Tous' }, ...PROJET_STATUTS], PRJ.filtre)}</select>
-      <div class="spacer"></div><button class="btn primary" data-act="prj-new">+ Nouveau projet</button></div>
-    ${list.length ? `<div class="table-wrap"><table><thead><tr><th>Code</th><th>Projet</th><th>Client</th><th>Statut</th><th class="num">Consommé</th><th>Échéance</th></tr></thead><tbody>
-    ${list.map(p => {
-      const j = jours(heuresProjet(p.id)), pct = p.budgetJours ? j / p.budgetJours * 100 : 0;
-      return `<tr class="click" data-act="prj-open" data-id="${p.id}"><td><b>${esc(p.code)}</b></td><td>${esc(p.nom)}</td><td>${esc(clientNom(p.clientId))}</td><td>${badge(p.statut)}</td>
-        <td class="num">${num(j)}${p.budgetJours ? ' / ' + num(p.budgetJours) : ''} j${p.budgetJours ? `<div class="bar ${pct > 100 ? 'over' : ''}"><i style="width:${Math.min(pct, 100)}%"></i></div>` : ''}</td>
-        <td class="${p.dateFin && p.dateFin < todayStr() && PROJET_ACTIFS.includes(p.statut) ? 'late' : ''}">${fmtDate(p.dateFin)}</td></tr>`;
-    }).join('')}</tbody></table></div>` : '<div class="empty">Aucun projet pour ce filtre.</div>'}
-  </div>`;
+  const p = PRJ.sel ? byId('projets', PRJ.sel) : null;
+  if (!p) {
+    const list = DB.projets.filter(p => PRJ.filtre === 'tous' ? true : PRJ.filtre === 'actifs' ? PROJET_ACTIFS.includes(p.statut) : p.statut === PRJ.filtre)
+      .sort((a, b) => (b.code || '').localeCompare(a.code || ''));
+    return `<div class="card">
+      <div class="row" style="margin-bottom:10px"><h2 style="margin:0">Suivi projet</h2>${projetSelectHTML()}
+        <div class="spacer"></div><button class="btn primary" data-act="prj-new">+ Nouveau projet</button></div>
+      <p class="small muted" style="margin:0 0 10px">Choisissez un projet ci-dessus, ou cliquez sur une ligne.</p>
+      <div class="row" style="margin-bottom:8px"><select id="prj-filtre" style="width:auto">${optHTML([{ v: 'actifs', l: 'Actifs' }, { v: 'tous', l: 'Tous' }, ...PROJET_STATUTS], PRJ.filtre)}</select></div>
+      ${list.length ? `<div class="table-wrap"><table><thead><tr><th>Code</th><th>Projet</th><th>Client</th><th>Statut</th><th class="num">Consommé</th><th>Échéance</th></tr></thead><tbody>
+      ${list.map(p => {
+        const j = jours(heuresProjet(p.id)), pct = p.budgetJours ? j / p.budgetJours * 100 : 0;
+        return `<tr class="click" data-act="prj-open" data-id="${p.id}"><td><b>${esc(p.code)}</b></td><td>${esc(p.nom)}</td><td>${esc(clientNom(p.clientId))}</td><td>${badge(p.statut)}</td>
+          <td class="num">${num(j)}${p.budgetJours ? ' / ' + num(p.budgetJours) : ''} j${p.budgetJours ? `<div class="bar ${pct > 100 ? 'over' : ''}"><i style="width:${Math.min(pct, 100)}%"></i></div>` : ''}</td>
+          <td class="${p.dateFin && p.dateFin < todayStr() && PROJET_ACTIFS.includes(p.statut) ? 'late' : ''}">${fmtDate(p.dateFin)}</td></tr>`;
+      }).join('')}</tbody></table></div>` : '<div class="empty">Aucun projet pour ce filtre.</div>'}
+    </div>`;
+  }
+  const ong = PRJ_ONGLETS.find(o => o.k === PRJ.onglet) || PRJ_ONGLETS[0];
+  return `<div class="card" style="padding-bottom:0">
+    <div class="row">${PRJ.from && !['projets', 'liste'].includes(PRJ.from) ? '<button class="btn sm" data-act="prj-back">← Retour</button>' : ''}
+      <h2 style="margin:0">Suivi projet</h2>${projetSelectHTML()}<div class="spacer"></div>
+      <button class="btn sm" data-act="fiche-from-prj" data-id="${p.id}">Fiche de pointage</button>
+      <button class="btn sm" data-act="prj-edit" data-id="${p.id}">Modifier</button></div>
+    <h2 style="margin:14px 0 0">${esc(p.code)} — ${esc(p.nom)} ${badge(p.statut)}</h2>
+    <div class="small muted">${esc(clientNom(p.clientId))}</div>
+    <div class="subtabs">${PRJ_ONGLETS.map(o => `<button class="${o.k === ong.k ? 'on' : ''}" data-act="prj-onglet" data-id="${o.k}">${esc(o.l)}${o.v ? `<span class="soon">v${o.v}</span>` : ''}</button>`).join('')}</div>
+  </div>
+  ${ong.k === 'synthese' ? projetDetail(p) : `<div class="card empty">« ${esc(ong.l)} » arrive avec la version ${ong.v}.</div>`}`;
 };
-VIEWS.projets_after = () => { const s = $('#prj-filtre'); if (s) s.onchange = () => { PRJ.filtre = s.value; render(); }; };
+VIEWS.projets_after = () => {
+  const s = $('#prj-filtre'); if (s) s.onchange = () => { PRJ.filtre = s.value; render(); };
+  const ps = $('#prj-sel'); if (ps) ps.onchange = () => { PRJ.sel = ps.value || null; PRJ.from = 'projets'; render(); };
+};
+// Sous-onglet « Synthèse » : la fiche du projet (infos, consommé, tâches WBS, derniers pointages)
 function projetDetail(p) {
   const h = heuresProjet(p.id), hf = heuresProjet(p.id, true), j = jours(h), jf = jours(hf);
   const regie = p.facturation !== 'Forfait';
@@ -766,10 +823,6 @@ function projetDetail(p) {
   const pts = DB.pointages.filter(x => x.projetId === p.id).sort((a, b) => b.date.localeCompare(a.date));
   const taches = p.taches || [];
   return `<div class="card">
-    <div class="row"><button class="btn sm" data-act="prj-back">← Retour</button><div class="spacer"></div>
-      <button class="btn sm" data-act="fiche-from-prj" data-id="${p.id}">Fiche de pointage</button>
-      <button class="btn sm" data-act="prj-edit" data-id="${p.id}">Modifier</button></div>
-    <h2 style="margin-top:12px">${esc(p.code)} — ${esc(p.nom)} ${badge(p.statut)}</h2>
     <div class="info">
       <div><small>Client</small><a href="#" data-act="crm-open" data-id="${p.clientId}">${esc(clientNom(p.clientId))}</a></div>
       ${DB.devis.filter(d => d.projetId === p.id).map(d => `<div><small>Devis</small><a href="#" data-act="devis-edit" data-id="${d.id}">${esc(d.numero)}</a> · ${eur(d.montantHT)}</div>`).join('')}
@@ -1590,8 +1643,9 @@ const ACTIONS = {
   'part-open': (el, id) => { PAR.sel = id; go('partenaires'); },
   'part-new': () => editPartenaire(null),
   'part-edit': (el, id) => editPartenaire(byId('partenaires', id)),
-  'prj-open': (el, id) => { PRJ.from = VIEW; PRJ.sel = id; go('projets'); },
-  'prj-back': () => { PRJ.sel = null; go(PRJ.from && PRJ.from !== 'projets' ? PRJ.from : 'projets'); },
+  'prj-open': (el, id) => { PRJ.from = VIEW; if (PRJ.sel !== id) PRJ.onglet = 'synthese'; PRJ.sel = id; go('projets'); },
+  'prj-back': () => { const f = PRJ.from; PRJ.from = 'projets'; go(f && f !== 'projets' ? f : 'projets'); },
+  'prj-onglet': (el, id) => { PRJ.onglet = id; render(); },
   'lst-sort': (el, id) => { LST.dir = LST.sort === id ? -LST.dir : (LST_COLS.find(c => c.k === id)?.num || LST_COLS.find(c => c.k === id)?.date ? -1 : 1); LST.sort = id; $('#lst-table').innerHTML = listeTableHTML(); },
   'lst-csv': () => exportListeCSV(),
   'prj-new': () => editProjet(null),
@@ -1621,8 +1675,12 @@ const ACTIONS = {
   'demo-reset': () => { if (confirm('Effacer toutes les données de démo de ce navigateur ?')) { localStorage.removeItem(DEMO_KEY); location.reload(); } }
 };
 document.addEventListener('click', e => {
+  // menu mobile : ☰ ouvre, le voile ou un choix de menu referme
+  if (e.target.closest('#burger')) return document.body.classList.toggle('menu-open');
+  if (e.target.closest('#side-bg')) return document.body.classList.remove('menu-open');
   const tab = e.target.closest('#tabs button');
-  if (tab) { if (tab.dataset.view === 'projets') PRJ.sel = null; return go(tab.dataset.view); }
+  // Suivi projet garde le dernier projet consulté (choix possible dans la liste en haut de page)
+  if (tab) { document.body.classList.remove('menu-open'); if (tab.dataset.view === 'projets') PRJ.from = 'projets'; return go(tab.dataset.view); }
   const el = e.target.closest('[data-act]');
   if (!el || el.closest('.modal')) return;
   if (el.tagName === 'A') e.preventDefault();
